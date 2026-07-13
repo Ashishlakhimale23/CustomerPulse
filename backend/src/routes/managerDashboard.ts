@@ -8,7 +8,7 @@ export const managerDashboardRouter = Router();
 managerDashboardRouter.use(requireAuth);
 
 managerDashboardRouter.get(
-  "/teams",
+  "/team",
   requireRole(UserRole.HOD),
   managerDashboardController.getTeam
 );
@@ -25,3 +25,8 @@ managerDashboardRouter.post(
   managerDashboardController.reassignTicket
 );
 
+managerDashboardRouter.post(
+  "/set-manager",
+  requireRole(UserRole.GLOBAL_ADMIN),
+  managerDashboardController.setDepartmentManager
+);
