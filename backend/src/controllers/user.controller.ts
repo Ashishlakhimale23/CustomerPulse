@@ -2,7 +2,7 @@ import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../lib/database";
 import { TicketStatus } from "../generated/prisma/enums";
-import bcrypt from "bcryptjs"
+import { AppError } from "../middleware/errorHandler";
 
 export const userController = {
   // GET /users/me
@@ -10,7 +10,7 @@ export const userController = {
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: req.user!.id },
     });
-    res.json(user);
+    res.json({ ...user, departmentId: user.agentsdepartmentId });
   },
 
   //metric ->count of opentickets,assigned tickets,sla breached,resolved,total submissions
@@ -28,7 +28,7 @@ export const userController = {
       prisma.ticket.count({
         where: {
           requesterId: userId,
-          status: {in:[TicketStatus.IN_PROGRESS,TicketStatus.REOPENED,TicketStatus.OPEN]},
+          status: "OPEN",
         },
       }),
 
@@ -89,6 +89,7 @@ export const userController = {
       select: {
         id: true, fullName: true, email: true, role: true, 
         supportLevel: true, isActive: true, isAvailableForAssignment: true, maxActiveTickets: true,
+        agentsdepartmentId: true,
         _count : {
           select : {
             ticketsAssigned : true
@@ -97,7 +98,7 @@ export const userController = {
       },
     
     });
-    res.json(users);
+    res.json(users.map(u => ({ ...u, departmentId: u.agentsdepartmentId })));
   },
 
   // GET /users/:id
@@ -107,7 +108,7 @@ export const userController = {
       where: { id: req.params.id },
     });
     if (!user) return res.status(404).json({ error: "Not found" });
-    res.json(user);
+    res.json({ ...user, departmentId: user.agentsdepartmentId });
   },
   // PATCH /users/me/availability  { isAvailableForAssignment }
   // Self-service toggle so an agent going on break/PTO stops receiving
@@ -119,29 +120,34 @@ export const userController = {
     });
     res.json(user);
   },
-// @ts-ignore
-  async resetPassword(req:AuthedRequest,res:Response){
-    const {newPassword,oldPassword} = req.body
-    console.log(newPassword,oldPassword)
-    const checkuser = await prisma.user.findFirst({
-      where : {id : req.params.id}
-    })
 
-    if (!checkuser || !checkuser.passwordHash) return res.json("no user found")
+  // PATCH /users/:id  (GLOBAL_ADMIN only)
+  // Lets an admin edit an operator's profile from the User Directory,
+  // including transferring an agent to a different department when
+  // teams get reorganized.
+  async update(req: AuthedRequest, res: Response) {
+    const { role, departmentId, supportLevel, isActive, isAvailableForAssignment, maxActiveTickets } = req.body;
 
-    const check = await bcrypt.compare(oldPassword,checkuser.passwordHash)
+    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new AppError("User not found", 404);
 
-    if(!check) return res.json("password did'nt match")
-
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (departmentId) {
+      const department = await prisma.department.findUnique({ where: { id: departmentId } });
+      if (!department) throw new AppError("Department not found", 404);
+    }
 
     const user = await prisma.user.update({
-      where :{id : req.params.id} ,
-      data : {
-        passwordHash
-      }
-    })
+      where: { id: req.params.id },
+      data: {
+        ...(role !== undefined && { role }),
+        agentsdepartmentId: departmentId || null,
+        ...(supportLevel !== undefined && { supportLevel: supportLevel || null }),
+        ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+        ...(isAvailableForAssignment !== undefined && { isAvailableForAssignment: Boolean(isAvailableForAssignment) }),
+        ...(maxActiveTickets !== undefined && { maxActiveTickets: Number(maxActiveTickets) }),
+      },
+    });
 
-    res.json(user)
-  }
+    res.json({ ...user, departmentId: user.agentsdepartmentId });
+  },
 };
