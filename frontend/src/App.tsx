@@ -140,6 +140,10 @@ export default function App() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatSla, setNewCatSla] = useState("24");
   const [newCatPriority, setNewCatPriority] = useState<TicketPriority>(TicketPriority.P3);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatSla, setEditCatSla] = useState("24");
+  const [editCatPriority, setEditCatPriority] = useState<TicketPriority>(TicketPriority.P3);
   const [newCatLevel, setNewCatLevel] = useState<SupportLevel>(SupportLevel.L1);
 
   const [newKwName, setNewKwName] = useState("");
@@ -601,6 +605,42 @@ export default function App() {
       if (res.ok) {
         handleSelectDeptConfig(selectedDeptId);
         setSuccess("Category deleted.");
+      }
+    } catch (err) {}
+  };
+
+  // Start editing a category
+  const handleStartEditCategory = (c: TicketCategory) => {
+    setEditingCategoryId(c.id);
+    setEditCatName(c.name);
+    setEditCatSla(String(c.defaultSlaHours));
+    setEditCatPriority(c.defaultPriority as TicketPriority);
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategoryId(null);
+  };
+
+  // Update Category (name, SLA deadline, priority)
+  const handleUpdateCategory = async (catId: string) => {
+    if (!editCatName) return;
+    try {
+      const res = await fetch(`http://localhost:3000/categories/${catId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editCatName,
+          defaultSlaHours: Number(editCatSla),
+          defaultPriority: editCatPriority,
+        })
+      });
+      if (res.ok) {
+        setEditingCategoryId(null);
+        handleSelectDeptConfig(selectedDeptId);
+        setSuccess("Category updated.");
       }
     } catch (err) {}
   };
@@ -1644,29 +1684,85 @@ export default function App() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-zinc-200 text-zinc-700">
-                                {deptCategoriesList.map((c) => (
-                                  <tr key={c.id}>
-                                    <td className="px-4 py-2.5 font-medium">
-                                      {c.name}
-                                    </td>
-                                    <td className="px-4 py-2.5 font-mono">
-                                      {c.defaultSlaHours} hours
-                                    </td>
-                                    <td className="px-4 py-2.5 font-mono font-bold text-teal-800">
-                                      {c.defaultPriority}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-right">
-                                      <button
-                                        onClick={() =>
-                                          handleDeleteCategory(c.id)
-                                        }
-                                        className="text-red-500 hover:text-red-700 font-bold"
-                                      >
-                                        Delete
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {deptCategoriesList.map((c) =>
+                                  editingCategoryId === c.id ? (
+                                    <tr key={c.id} className="bg-zinc-50">
+                                      <td className="px-4 py-2.5">
+                                        <input
+                                          type="text"
+                                          value={editCatName}
+                                          onChange={(e) => setEditCatName(e.target.value)}
+                                          className="text-xs p-1.5 border border-zinc-300 bg-white w-full"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={editCatSla}
+                                          onChange={(e) => setEditCatSla(e.target.value)}
+                                          className="text-xs p-1.5 border border-zinc-300 bg-white w-24"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <select
+                                          value={editCatPriority}
+                                          onChange={(e) =>
+                                            setEditCatPriority(e.target.value as TicketPriority)
+                                          }
+                                          className="text-xs p-1.5 border border-zinc-300 bg-white"
+                                        >
+                                          <option value="P1">P1 - Critical</option>
+                                          <option value="P2">P2 - High</option>
+                                          <option value="P3">P3 - Moderate</option>
+                                          <option value="P4">P4 - Low</option>
+                                        </select>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                        <button
+                                          onClick={() => handleUpdateCategory(c.id)}
+                                          className="text-teal-700 hover:text-teal-900 font-bold mr-3"
+                                        >
+                                          Save
+                                        </button>
+                                        <button
+                                          onClick={handleCancelEditCategory}
+                                          className="text-zinc-500 hover:text-zinc-700 font-bold"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    <tr key={c.id}>
+                                      <td className="px-4 py-2.5 font-medium">
+                                        {c.name}
+                                      </td>
+                                      <td className="px-4 py-2.5 font-mono">
+                                        {c.defaultSlaHours} hours
+                                      </td>
+                                      <td className="px-4 py-2.5 font-mono font-bold text-teal-800">
+                                        {c.defaultPriority}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                        <button
+                                          onClick={() => handleStartEditCategory(c)}
+                                          className="text-zinc-600 hover:text-zinc-900 font-bold mr-3"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            handleDeleteCategory(c.id)
+                                          }
+                                          className="text-red-500 hover:text-red-700 font-bold"
+                                        >
+                                          Delete
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  )
+                                )}
                               </tbody>
                             </table>
                           </div>
