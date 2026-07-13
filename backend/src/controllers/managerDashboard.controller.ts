@@ -7,24 +7,34 @@ import { UserRole } from "../generated/prisma/client";
 export const managerDashboardController = {
   async getTeam(req: AuthedRequest, res: Response) {
     const managerId = req.user!.id;
-    const manager = await prisma.user.findUnique({
-      where: { id: managerId },
+    const { departmentId } = req.query as { departmentId?: string };
+
+    const managedDepartments = await prisma.department.findMany({
+      where: { managerId },
+      select: { id: true, name: true },
     });
 
-    if (!manager) {
+    if (managedDepartments.length === 0) {
       throw new AppError("You are not assigned to any department", 400);
     }
 
-    const department = await prisma.department.findMany({
-      where: { managerId: manager.id },
-      select: { name: true,id :true},
-    });
+    const managedDeptIds = managedDepartments.map((d) => d.id);
 
-    const departmentIds = department.map(dept => dept.id)
+    if (departmentId && !managedDeptIds.includes(departmentId)) {
+      throw new AppError("Department is not managed by you", 403);
+    }
+
+    const targetDeptIds = departmentId ? [departmentId] : managedDeptIds;
+
+    const department = departmentId
+      ? managedDepartments.find((d) => d.id === departmentId)
+      : managedDepartments[0];
 
     const users = await prisma.user.findMany({
       where: {
-        agentsdepartmentId:{in:departmentIds},
+        agentsdepartmentId: { in: targetDeptIds },
+        id: { not: managerId },
+        isActive: true,
       },
       select: {
         id: true,
@@ -77,8 +87,10 @@ export const managerDashboardController = {
     );
 
     res.json({
-      departmentId: departmentIds,
-      departmentName: department || "Unknown",
+      departmentId: departmentId || managedDeptIds[0],
+      departmentName: departmentId
+        ? department?.name || "Unknown"
+        : managedDepartments.map((d) => d.name).join(", "),
       users: usersWithTickets,
     });
   },
@@ -96,13 +108,13 @@ export const managerDashboardController = {
 
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { agentsdepartmentId: true, fullName: true },
+      select: { departmentId: true, fullName: true },
     });
 
     
     const managerIds = manager.map(ids => ids.id)
 
-    if (!manager || !targetUser || !managerIds.includes(targetUser.agentsdepartmentId!) ) {
+    if (!manager || !targetUser || !managerIds.includes(targetUser.departmentId) ) {
       throw new AppError("User is not in your department", 403);
     }
 
@@ -167,13 +179,13 @@ export const managerDashboardController = {
 
     const newAssignee = await prisma.user.findUnique({
       where: { id: newAssigneeId },
-      select: { agentsdepartmentId: true, isActive: true },
+      select: { departmentId: true, isActive: true },
     });
 
     if (!newAssignee || !newAssignee.isActive) {
       throw new AppError("New assignee not found or inactive", 400);
     }
-    if (!managerIds.includes(newAssignee.agentsdepartmentId!)) {
+    if (!managerIds.includes(newAssignee.departmentId)) {
       throw new AppError("New assignee is not in your department", 400);
     }
 
@@ -213,5 +225,36 @@ export const managerDashboardController = {
     res.json(updated);
   },
 
+  async setDepartmentManager(req: AuthedRequest, res: Response) {
+    const { userId } = req.body;
 
+    if (!userId) throw new AppError("userId is required", 400);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { departmentId: true, role: true },
+    });
+
+    if (!user) throw new AppError("User not found", 404);
+    if (!user.departmentId) throw new AppError("User must belong to a department first", 400);
+    if (user.role === UserRole.HOD) {
+      throw new AppError("User is already a Department Manager", 400);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { role: UserRole.HOD},
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: `Promoted user ${updated.fullName} to Department Manager`,
+        entityType: "User",
+        entityId: userId,
+      },
+    });
+
+    res.json(updated);
+  },
 };
