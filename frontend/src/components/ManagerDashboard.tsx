@@ -58,7 +58,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setError("");
     try {
       const targetDept = deptId || selectedDeptId;
-      const url =  `http://localhost:3000/manager-dashboard/team`;
+      const url = targetDept
+        ? `${API_BASE}/manager-dashboard/team?departmentId=${targetDept}`
+        : `${API_BASE}/manager-dashboard/team`;
 
       const res = await requestFn(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -128,7 +130,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   useEffect(() => {
     fetchTeam(selectedDeptId);
-  }, []);
+  }, [selectedDeptId, token]);
 
   const totalTeamTickets = teamData?.users.reduce((sum, u) => sum + u.activeTickets, 0) || 0;
   const totalBreached = teamData?.users.reduce((sum, u) => sum + u.breachedTickets, 0) || 0;
@@ -428,3 +430,4 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   );
 };
 
+export default ManagerDashboard;
