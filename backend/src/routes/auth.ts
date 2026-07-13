@@ -12,3 +12,4 @@ export const authRouter = Router();
 // system's signup flow and already returns a token on success. This
 // route is just for logging back in afterward.
 authRouter.post("/login", publicTokenLimiter, validateBody(loginSchema), asyncHandler(authController.login));
+authRouter.post("/signup",authController.signup)

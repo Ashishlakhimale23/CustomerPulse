@@ -4,7 +4,6 @@ import { UserRole } from "../generated/prisma/client";
 export interface AuthTokenPayload {
   id: string;
   role: UserRole;
-  departmentId: string | null;
 }
 
 const EXPIRES_IN = "12h";

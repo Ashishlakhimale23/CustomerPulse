@@ -2,7 +2,7 @@ import { prisma } from "../lib/database";
 import { SupportLevel, TicketStatus, UserRole, TicketPriority } from "../generated/prisma/client";
 import { notificationService } from "./notification.service";
 
-const LEVEL_ORDER: SupportLevel[] = [SupportLevel.L1, SupportLevel.L2, SupportLevel.L3, SupportLevel.L4];
+const LEVEL_ORDER: SupportLevel[] = [SupportLevel.L1, SupportLevel.L2];
 
 function nextLevel(current: SupportLevel | null): SupportLevel {
   const idx = current ? LEVEL_ORDER.indexOf(current) : -1;
@@ -41,14 +41,14 @@ export const escalationService = {
 
     const candidates = await prisma.user.findMany({
       where: {
-        departmentId: ticket.departmentId,
+        agentsdepartmentId: ticket.departmentId,
         role: { in: [UserRole.AGENT] },
         supportLevel: toLevel,
         isActive: true,
       },
       include: {
         skills: true,
-        ticketsAssigned: { where: { status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.PENDING] } }, select: { id: true } },
+        ticketsAssigned: { where: { status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD] } }, select: { id: true } },
       },
     });
 

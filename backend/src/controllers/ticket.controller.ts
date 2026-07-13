@@ -5,15 +5,24 @@ import { escalationService } from "../services/escalation.service";
 import { assignmentService } from "../services/assignment.service";
 import { logStatusChange } from "../services/statushistory.service";
 import { prisma } from "../lib/database";
-import { TicketStatus, UserRole } from "../generated/prisma/client";
+import { TicketPriority, TicketStatus, UserRole } from "../generated/prisma/client";
 import { isRequesterOnly } from "../utils/rbac";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
 import { AppError } from "../middleware/errorHandler";
+import { hoursFromNow } from "../utils/time";
+import { prismaVersion } from "../generated/prisma/internal/prismaNamespace";
+import { notificationService } from "../services/notification.service";
 
 // Roles whose "list" view is scoped to just their department, rather
 // than being requester-only (see below) or company-wide (GLOBAL_ADMIN).
-const DEPARTMENT_SCOPED_ROLES: UserRole[] = [ UserRole.DEPT_MANAGER];
+const DEPARTMENT_SCOPED_ROLES: UserRole[] = [ UserRole.HOD];
 
+const BASE_SLA_HOURS_BY_PRIORITY: Record<TicketPriority, number> = {
+  P1: 4,
+  P2: 8,
+  P3: 24,
+  P4: 72,
+};
 
 export const ticketController = {
 
@@ -21,9 +30,27 @@ export const ticketController = {
     if (!req.params.id) throw new AppError("Invalid user")
 
     const tickets = await prisma.ticket.findMany({
-      where : {
-        requesterId : req.params.id,
-      },
+      where: {
+        requesterId: req.params.id,
+        status : {notIn : [TicketStatus.ON_HOLD,TicketStatus.RESOLVED]}
+      }, select: {
+        createdAt : true,
+        ticketNumber: true,
+        id : true,
+        priority: true,
+        status: true,
+        clientName: true,
+        department: {
+          select: {
+            name: true
+          }
+        },
+        assignee: {
+          select: {
+            fullName: true
+          }
+        },
+      }
 
     })
 
@@ -31,6 +58,69 @@ export const ticketController = {
 
   },
 
+  async resolved(req: AuthedRequest, res: Response) {
+    if (!req.params.id) throw new AppError("Invalid user")
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        requesterId: req.params.id,
+        status : TicketStatus.RESOLVED
+      }, select: {
+        createdAt: true,
+        ticketNumber: true,
+        id: true,
+        priority: true,
+        status: true,
+        clientName: true,
+        department: {
+          select: {
+            name: true
+          }
+        },
+        assignee: {
+          select: {
+            fullName: true
+          }
+        },
+      }
+
+    })
+
+    res.json(tickets)
+
+  },
+
+  async onhold(req: AuthedRequest, res: Response) {
+    if (!req.params.id) throw new AppError("Invalid user")
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        requesterId: req.params.id,
+        status : TicketStatus.ON_HOLD
+      }, select: {
+        createdAt: true,
+        ticketNumber: true,
+        id: true,
+        priority: true,
+        status: true,
+        clientName: true,
+        department: {
+          select: {
+            name: true
+          }
+        },
+        assignee: {
+          select: {
+            fullName: true
+          }
+        },
+      }
+
+    })
+
+    res.json(tickets)
+
+  },
 
 
 
@@ -109,8 +199,28 @@ export const ticketController = {
 
     const assignedTickets = await prisma.ticket.findMany({
       where : { 
-        assigneeId : id
+        assigneeId : id,
+        status :{notIn : [TicketStatus.RESOLVED]}
+      },
+       select: {
+        createdAt:true,
+        id:true,
+        ticketNumber: true,
+        priority: true,
+        status: true,
+        clientName: true,
+        department: {
+          select: {
+            name: true
+          }
+        },
+        assignee: {
+          select: {
+            fullName: true
+          }
+        },
       }
+
     })
 
     console.log(assignedTickets)
@@ -128,7 +238,26 @@ export const ticketController = {
       where : { 
         requesterId : id,
         slaBreached : true
+      },
+       select: {
+        id :true,
+        createdAt:true,
+        ticketNumber: true,
+        priority: true,
+        status: true,
+        clientName: true,
+        department: {
+          select: {
+            name: true
+          }
+        },
+        assignee: {
+          select: {
+            fullName: true
+          }
+        },
       }
+
     })
 
     console.log(assignedTickets)
@@ -136,40 +265,16 @@ export const ticketController = {
 
   },
 
-  //@ts-ignore
-  async getUnassignedDepartmentTickets(req:AuthedRequest,res:Response){
-    const userId = req.user?.id
-    const departmentId = req.params.id
-    if (!userId) return res.status(404).json({ error: "id provided" });
 
-    const userInADepartment = await prisma.user.findFirst({
-      where : { 
-        id : userId,
-        departmentId : departmentId
-      }
-    })
-    
-    if (!userInADepartment) return res.status(404).json({ error: "user not found" });
 
-    const ticketsUnassignedInDepartment = await prisma.ticket.findMany({
-      where : {
-        departmentId : departmentId,
-        assigneeId : null 
-      }
-    })
 
-    if (!ticketsUnassignedInDepartment) return res.status(404).json({ error: "user not found" });
-
-    res.json(ticketsUnassignedInDepartment)
-
-  },
   // GET /tickets/department/:departmentId?status=&priority=
   // DEPT_ADMIN or MANAGER only. A DEPT_ADMIN is further restricted to
   // their own department.
   async listByDepartment(req: AuthedRequest, res: Response) {
     const { departmentId } = req.params;
 
-    if (req.user!.role === UserRole.DEPT_MANAGER && req.user!.departmentId !== departmentId) {
+    if (req.user!.role === UserRole.HOD && req.user!.departmentId !== departmentId) {
       throw new AppError("You can only view tickets in your own department", 403);
     }
 
@@ -225,6 +330,7 @@ export const ticketController = {
       where: { id: req.params.id },
       include: {
         assignee: true,
+        department : {select : {name :true}},
         requester: true,
         category: true,
         keywords: { include: { keyword: true } },
@@ -245,14 +351,76 @@ export const ticketController = {
   // PATCH /tickets/:id  (title/description/tags always editable; status
   // is staff/admin only - a requester never gets to move their own
   // ticket's status, that's the point of having someone else own it).
+
+  //@ts-ignore
   async update(req: AuthedRequest, res: Response) {
-    const {  status } = req.body;
+    const {  status,turnOverTime } = req.body;
 
-    if (status !== undefined && isRequesterOnly(req.user!.role)) {
-      throw new AppError("Requesters cannot change ticket status", 403);
+    const previous = await prisma.ticket.findUniqueOrThrow({ where: { id: req.params.id },
+      select :{
+        id : true,
+        status : true,
+        category:{
+          select :{
+            defaultPriority: true,
+            defaultSlaHours : true
+          }
+        }
+      }
+     });
+
+
+    if (status == TicketStatus.REOPENED && previous) {
+      const baseSlaHours = previous.category?.defaultSlaHours ?? BASE_SLA_HOURS_BY_PRIORITY["P3"];
+      const slaDeadline = hoursFromNow(baseSlaHours);
+
+      const ticket = await prisma.ticket.update({
+        where : {id : req.params.id},
+        data : {
+          status,
+          slaDeadline : slaDeadline,
+          turnOverTime : 0
+        }
+      })
+
+      if (status !== undefined && status !== previous.status) {
+        await logStatusChange({
+          ticketId: ticket.id,
+          fromStatus: previous.status,
+          toStatus: status,
+          changedById: req.user!.id,
+        });
+      }
+      return res.json(ticket)
+    } else if (status == TicketStatus.RESOLVED && previous) {
+
+      const ticket = await prisma.ticket.update({
+        where: { id: req.params.id },
+        data: {
+          status,
+          turnOverTime: turnOverTime
+        },select:{
+          id : true,
+          requester : true,
+          ticketNumber:true,
+          title : true
+        }
+      })
+      if (status !== undefined && status !== previous.status) {
+
+        await logStatusChange({
+          ticketId: ticket.id,
+          fromStatus: previous.status,
+          toStatus: status,
+          changedById: req.user!.id,
+        });
+      }
+
+      // @ts-ignore
+     await notificationService.sendTicketResolved(ticket, ticket.requester);
+      return res.json(ticket)
+
     }
-
-    const previous = await prisma.ticket.findUniqueOrThrow({ where: { id: req.params.id } });
 
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },

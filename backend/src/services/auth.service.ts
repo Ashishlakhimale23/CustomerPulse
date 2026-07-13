@@ -31,7 +31,6 @@ export const authService = {
     const token = signAuthToken({
       id: user.id,
       role: user.role,
-      departmentId: user.departmentId,
     });
 
     return {

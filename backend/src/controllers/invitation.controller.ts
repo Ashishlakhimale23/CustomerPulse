@@ -9,26 +9,36 @@ export const invitationController = {
   // POST /invitations  (GLOBAL_ADMIN, DEPT_ADMIN)
   // @ts-ignore
   async create(req: AuthedRequest, res: Response) {
-    const inviter = req.user
-    if (inviter == undefined || !inviter || inviter == null){
-      return res.status(401).json({message:"no inviter found"})
+    try {
+      const inviter = req.user
+      if (inviter == undefined || !inviter || inviter == null) {
+        return res.status(401).json({ message: "no inviter found" })
+      }
+
+      const invitation = await invitationService.createInvitation({
+        inviter: {
+          id: inviter.id,
+          role: inviter.role,
+        },
+        email: req.body.email,
+        role: req.body.role,
+        name: req.body.name,
+        departmentId: req.body.departmentId,
+        departmentIds : req.body.departmentIds,
+        categoryIds: req.body.categoryIds,
+        supportLevel: req.body.supportLevel,
+      });
+      res.status(201).json({
+        message:
+          "Successfully send invite"
+      });
+
+    } catch (error) {
+      //@ts-ignore
+      return res.status(401).json(error.message)
+
     }
 
-    const invitation = await invitationService.createInvitation({
-      inviter: {
-      id: inviter.id,
-      role: inviter.role,
-      },
-      email: req.body.email,
-      role: req.body.role,
-      name : req.body.name,
-      departmentId: req.body.departmentId,
-      categoryIds : req.body.categoryIds, 
-      supportLevel: req.body.supportLevel,
-    });
-    res.status(201).json({message:
-      "Successfully send invite"
-    });
   },
 
   // POST /invitations/accept  (public - invitee lands here from the emailed link)

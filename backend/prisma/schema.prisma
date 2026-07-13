@@ -15,17 +15,16 @@ datasource db {
 
 
 enum UserRole {
+  CXO
   GLOBAL_ADMIN
-  DEPT_MANAGER
+  HOD
   AGENT
-  EMPLOYEE
+  REQUESTER
 }
 
 enum SupportLevel {
   L1
   L2
-  L3
-  L4
 }
 
 enum TicketPriority {
@@ -37,8 +36,9 @@ enum TicketPriority {
 
 enum TicketStatus {
   OPEN
+  REOPENED
   IN_PROGRESS
-  PENDING
+  ON_HOLD
   RESOLVED
 }
 
@@ -75,6 +75,7 @@ model Client {
   id String @id @default(uuid())
 
   name String
+  projectName String
   createdAt DateTime @default(now())
 }
 
@@ -84,7 +85,14 @@ model Department {
   description String?
   createdAt   DateTime @default(now())
 
-  users       User[]
+  managerId String?
+  manager User? @relation("departmentManager",fields: [managerId] , references: [id])
+
+  cxoId String?
+  cxo User? @relation("departmentCxo",fields: [cxoId],references: [id])
+
+  agents      User[] @relation("departmentAgents")
+
   categories  TicketCategory[]
   tickets     Ticket[]
   keywords    Keyword[]
@@ -105,13 +113,14 @@ model User {
   // Nullable because SSO users won't have one.
   passwordHash    String?
 
-  departmentId    String?
-  managerId       String?
-  role            UserRole     @default(EMPLOYEE)
+  //agent should be assigned to only one department
+  agentsdepartmentId    String? 
+  role            UserRole     @default(REQUESTER)
   supportLevel    SupportLevel?
 
   isActive        Boolean      @default(true)
   onboardedById   String?
+
 
   // NOTE(added): inputs to the auto-assignment load balancer.
   isAvailableForAssignment Boolean @default(true)
@@ -120,9 +129,15 @@ model User {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  department      Department?  @relation(fields: [departmentId], references: [id])
-  manager         User?        @relation("UserHierarchy", fields: [managerId], references: [id])
-  reports         User[]       @relation("UserHierarchy")
+  // managed departments by the user
+  managedDepartments     Department[]  @relation("departmentManager")
+  // agent
+  assignedDepartment Department? @relation("departmentAgents",fields: [agentsdepartmentId],references: [id]) 
+  //cxo   
+  coxDepartements  Department[] @relation("departmentCxo")
+
+
+  
   onboardedUsers  User[]       @relation("OnboardedBy")
   onboardedBy     User?        @relation("OnboardedBy", fields: [onboardedById], references: [id])
 
@@ -161,7 +176,7 @@ model Keyword {
   synonyms     String[] @default([])
   createdAt    DateTime @default(now())
 
-  department   Department      @relation(fields: [departmentId], references: [id])
+  department   Department      @relation(fields: [departmentId], references: [id],onDelete: Cascade)
   tickets      TicketKeyword[]
   agents       UserKeyword[]
 
@@ -182,7 +197,7 @@ model KeywordSuggestion {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  department     Department        @relation(fields: [departmentId], references: [id])
+  department     Department        @relation(fields: [departmentId], references: [id],onDelete: Cascade)
   reviewedBy     User?             @relation("SuggestionReviewedBy", fields: [reviewedById], references: [id])
 
   @@unique([departmentId, term])
@@ -205,8 +220,8 @@ model TicketKeyword {
   ticketId   String
   keywordId  String
 
-  ticket     Ticket   @relation(fields: [ticketId], references: [id])
-  keyword    Keyword  @relation(fields: [keywordId], references: [id])
+  ticket     Ticket   @relation(fields: [ticketId], references: [id],onDelete: Cascade)
+  keyword    Keyword  @relation(fields: [keywordId], references: [id],onDelete: Cascade)
 
   @@id([ticketId, keywordId])
 }
@@ -242,12 +257,10 @@ model TicketCategory {
   departmentId    String
   name            String
   defaultSlaHours Int?
+  
   defaultPriority TicketPriority @default(P3)
-  // NOTE(added): minimum support level a category should start at,
-  // independent of priority (e.g. "Security Incident" always starts L2).
-  minSupportLevel SupportLevel   @default(L1)
 
-  department      Department     @relation(fields: [departmentId], references: [id])
+  department      Department     @relation(fields: [departmentId], references: [id],onDelete: Cascade)
   tickets         Ticket[]
 
   // invitations 
@@ -274,7 +287,7 @@ model Ticket {
   clientEmail       String
   dateOfOccurance  DateTime
   site             String
-  state            String
+  turnoverRate     Float? 
 
   status           TicketStatus   @default(OPEN)
   priority         TicketPriority @default(P3)
@@ -306,7 +319,7 @@ model Ticket {
   updatedAt        DateTime       @updatedAt
 
   requester        User           @relation("Requester", fields: [requesterId], references: [id])
-  department       Department     @relation(fields: [departmentId], references: [id])
+  department       Department     @relation(fields: [departmentId], references: [id],onDelete: Cascade)
   category         TicketCategory? @relation(fields: [categoryId], references: [id])
   assignee         User?          @relation("Assignee", fields: [assigneeId], references: [id])
   escalatedTo      User?          @relation("TicketEscalatedTo", fields: [escalatedToId], references: [id])
@@ -315,6 +328,7 @@ model Ticket {
   attachments      TicketAttachment[]
   escalationHistory TicketEscalation[]
   keywords         TicketKeyword[]
+  turnOverTime     Float?
 
 
   // NOTE(added): full log of every status transition, timestamped, so
@@ -334,7 +348,7 @@ model TicketComment {
   isInternal  Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  ticket      Ticket   @relation(fields: [ticketId], references: [id],onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id])
 }
 
@@ -376,7 +390,8 @@ model TicketStatusHistory {
   changedById String?
   changedAt   DateTime     @default(now())
   note        String?
-
+ 
+  durationInPrevStatusMinutes Int?
   ticket      Ticket       @relation(fields: [ticketId], references: [id])
   changedBy   User?        @relation("TicketStatusChangedBy", fields: [changedById], references: [id])
 
@@ -401,8 +416,7 @@ model Invitation {
   invitedById     String
   role            UserRole
   Password        String
-  departmentId    String?
-  categories      TicketCategory[]
+  categories      TicketCategory[] 
   supportLevel    SupportLevel?
   status          InvitationStatus  @default(PENDING)
   token           String            @unique
@@ -411,5 +425,5 @@ model Invitation {
   createdAt       DateTime          @default(now())
 
   invitedBy       User              @relation("InvitedBy", fields: [invitedById], references: [id])
-  department      Department?       @relation(fields: [departmentId], references: [id])
+  department      Department[]     
 }

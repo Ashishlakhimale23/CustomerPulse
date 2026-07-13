@@ -17,7 +17,7 @@ export const STAFF_ROLES: UserRole[] = [
 
 /** Anyone whose role means "I only ever see tickets I personally filed". */
 export const REQUESTER_ONLY_ROLES: UserRole[] = [
-  UserRole.EMPLOYEE,
+  UserRole.REQUESTER,
 ];
 
 export const ASSIGNABLE_AGENT_ROLES: UserRole[] = [UserRole.AGENT];

@@ -36,8 +36,7 @@ app.use("/tickets", ticketRouter);
 app.use("/keywords", keywordRouter);
 app.use("/audit-logs", auditLogRouter);
 app.use("/clients",clientRouter)
-app.use("/manager-dashboard", managerDashboardRouter);
-
+app.use("/manager-dashboard",managerDashboardRouter)
 // ---- must be last ----
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -45,5 +44,4 @@ app.use(errorHandler);
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Helpdesk API listening on :${port}`);
-  startScheduledJobs();
 });

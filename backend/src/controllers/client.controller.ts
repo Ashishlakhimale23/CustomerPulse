@@ -34,7 +34,7 @@ export const clientController = {
 
     async createClient(req: AuthedRequest, res: Response) {
         try {
-            const { name } = req.body;
+            const { name,projectName } = req.body;
 
             if (!name || !name.trim()) {
                 return res.status(400).json({
@@ -58,6 +58,7 @@ export const clientController = {
             const client = await prisma.client.create({
                 data: {
                     name: name.trim().toUpperCase(),
+                    projectName :projectName.trim().toUpperCase(), 
                 },
             });
 
@@ -80,7 +81,7 @@ export const clientController = {
     async updateClient(req: AuthedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const { name } = req.body;
+            const { name,projectName } = req.body;
 
             if (!name || !name.trim()) {
                 return res.status(400).json({
@@ -101,6 +102,7 @@ export const clientController = {
                 where: { id },
                 data: {
                     name: name.trim().toUpperCase(),
+                    projectName: projectName.trim().toUpperCase()
                 },
             });
 

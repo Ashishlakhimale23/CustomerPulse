@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react"
 import { useState } from "react";
-import { Department, TicketCategory, Client } from "../types";
+import { Department, TicketCategory, Client, PAGES } from "../types";
 
 export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentView,token,departments,clients}:{
     setError:React.Dispatch<React.SetStateAction<string>>,
@@ -114,7 +114,7 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
 
       // Navigate to detailed ticket view directly
       setSelectedTicketId(data.id);
-      setCurrentView("ticket-detail");
+      setCurrentView(PAGES.TICKET_DETAILS);
     } catch (err: any) {
       setError(err.message);
     }
@@ -333,7 +333,7 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
                 <div className="border-t border-slate-100 pt-4 flex gap-2 justify-end">
                   <button
                     type="button"
-                    onClick={() => setCurrentView("dashboard")}
+                    onClick={() => setCurrentView(PAGES.DASHBOARD)}
                     className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                   >
                     Cancel

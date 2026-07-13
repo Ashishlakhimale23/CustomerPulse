@@ -1,8 +1,9 @@
 export enum UserRole {
   GLOBAL_ADMIN = "GLOBAL_ADMIN",
-  DEPT_MANAGER = "DEPT_MANAGER",
+  HOD = "HOD",
   AGENT = "AGENT",
-  EMPLOYEE = "EMPLOYEE",
+  REQUESTER = "REQUESTER",
+  CXO = "CXO"
 }
 
 export enum SupportLevel {
@@ -24,6 +25,7 @@ export enum TicketStatus {
   IN_PROGRESS = "IN_PROGRESS",
   PENDING = "PENDING",
   RESOLVED = "RESOLVED",
+  REOPENED  = "REOPENED"
 }
 
 export enum InvitationStatus {
@@ -57,6 +59,7 @@ export interface User {
 export interface Client {
   id: string;
   name: string;
+  projectName : string
   createdAt: string;
 }
 
@@ -66,8 +69,10 @@ export interface Department {
   name: string;
   description?: string;
   createdAt: string;
-  userCount?: number;
-  ticketCount?: number;
+  _count :{
+    agents : number,
+    tickets : number
+  } 
 }
 
 export interface DepartmentSuggestions {
@@ -81,7 +86,6 @@ export interface TicketCategory {
   name: string;
   defaultSlaHours?: number;
   defaultPriority: TicketPriority;
-  minSupportLevel: SupportLevel;
 }
 
 export interface Keyword {
@@ -204,8 +208,8 @@ export interface Invitation {
   email: string;
   invitedById: string;
   role: UserRole;
-  department:{
-    name :string};
+  department:[{
+    name :string}];
   categoryId?: string;
   categoryIds?: string[];
   supportLevel?: SupportLevel;
@@ -251,3 +255,36 @@ export interface TicketStatusHistory {
   changerName?: string;
   changerEmail?: string;
 }
+
+export const PAGES = { 
+  DASHBOARD : "DASHBOARD",
+  ASSINGED_TICKETS : "ASSINGED_TICKETS",
+  USER_DIRECTORY :  "USER_DIRECTORY",
+  CLIENTS : "CLIENTS",
+  PENDING_INVITES : "PENDING_INVITES",
+  DEPARTMENTS : "DEPARTMENTS",
+  AUDIT_LOGS : "AUDIT_LOGS",
+  ON_HOLD : "ON_HOLD",
+  HOD_DASHBOARD : "HOD_DASHBOARD",
+  CXO_DASHBOARD : "CXO_DASHBOARD",
+  NEW_TICKET : "NEW_TICKET",
+  MY_TICKETS : "MY_TICKETS",
+  BREACHED_TICKETS : "BREACHED_TICKETS",
+  PROFILE : "PROFILE",
+  TICKET_DETAILS : "TICKET_DETAILS",
+  RESOLVED_TICKETS : "RESOLVED_TICKETS",
+  AGENT_ANALYTICS : "AGENT_ANALYTICS",
+  HOD_ANALYTICS : "HOD_ANALYTICS",
+  CXO_ANALYTICS : "CXO_ANALYTICS"
+}
+
+
+export interface metric {
+        openTickets : number
+        assignedTickets : number,
+        slaBreachedTickets : number,
+        resolvedTickets : number,
+        onhold : number
+}
+
+

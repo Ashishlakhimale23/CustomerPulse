@@ -14,9 +14,10 @@ import {
   Trash2,
   Lock,
   ChevronDown,
-  Info
+  Info,
+  Tablet
 } from "lucide-react";
-import { Ticket, Comment, Attachment, Escalation, Keyword, User as UserType, TicketStatus, TicketPriority, SupportLevel, TicketStatusHistory } from "../types";
+import { Ticket, Comment, Attachment, Escalation, Keyword, User as UserType, TicketStatus, TicketPriority, SupportLevel, TicketStatusHistory, PAGES } from "../types";
 import { userInfo } from "os";
 interface metric {
         openTickets : number
@@ -31,12 +32,13 @@ interface TicketDetailProps {
   ticketId: string;
   token: string;
   currentUser: UserType;
+  setCurrentView : React.Dispatch<React.SetStateAction<string>>,
   onBack: () => void;
   metric : metric
   
 }
 
-export default function TicketDetail({ ticketId, token, currentUser, onBack,metric }: TicketDetailProps) {
+export default function TicketDetail({ ticketId, token, currentUser, onBack,metric,setCurrentView }: TicketDetailProps) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -62,8 +64,23 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
   const [availableAgents, setAvailableAgents] = useState<UserType[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
 
-  const isStaff = ["CEO", "CTO", "CFO", "COO", "GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER", "TEAM_LEAD", "AGENT"].includes(currentUser.role);
-  const isAdmin = ["GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER"].includes(currentUser.role);
+  const isStaff = ["AGENT"].includes(currentUser.role);
+  const isdepartmentHeads = ["CXO","HOD"].includes(currentUser.role)
+  const isAdmin = ["GLOBAL_ADMIN"].includes(currentUser.role);
+
+  const [sla,setSla] = useState<{
+    text: string;
+    color: string;
+} | null>(null)
+  const [tat,setTat] = useState<string | null>(null)
+
+  useEffect(()=>{
+    const slar = getSlaStatus()
+    setSla(sla)
+    const tat = getTurnaroundTime()
+    setTat(tat)
+
+  },[])
 
   const fetchTicketDetails = async () => {
     try {
@@ -218,6 +235,8 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
       setShowAssignForm(false);
       fetchTicketDetails();
       setSuccess("Agent assigned successfully.");
+      setCurrentView(PAGES.DASHBOARD)
+      
     } catch (err: any) {
       setError(err.message);
     }
@@ -275,10 +294,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
 
   // Action: Change Status
   const handleStatusChange = async (newStatus: TicketStatus) => {
-    if (ticket && ticket.requesterId === currentUser.id){
-      setError("You cant change the status on your own ticket")
-      return
-    }
+    
     setError("");
     setSuccess("");
     try {
@@ -288,13 +304,13 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus,turnOverTime:getTurnaroundTime().seconds })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update status");
 
       // Log action to audit log from frontend
-      await fetch("/api/audit-logs", {
+      await fetch("http://localhost:3000/audit-logs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -331,7 +347,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
       if (!res.ok) throw new Error(data.error || "Failed to update priority");
 
       // Log action
-      await fetch("/api/audit-logs", {
+      await fetch("http://localhost:3000/audit-logs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -374,24 +390,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
     }
   };
 
-  // Action: Reopen
-  const handleReopen = async () => {
-    setError("");
-    setSuccess("");
-    try {
-      const res = await fetch(`http://localhost:3000/tickets/${ticketId}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to reopen ticket");
-
-      fetchTicketDetails();
-      setSuccess("Ticket reopened successfully.");
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+  
 
   // Compute countdown client-side
   const getSlaStatus = () => {
@@ -413,14 +412,14 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
     return { text: `${hours}h ${mins}m left`, color: "text-zinc-700 bg-zinc-100 border-zinc-300" };
   };
 
-  const getTurnaroundTime = () => {
-    if (!ticket) return "—";
+  const getTurnaroundTime = () :{display:string,seconds:number} => {
+    if (!ticket) return {display : "-",seconds:0};
 
     const sortedHistories = [...statusHistories].sort((a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
 
     let totalActiveMs = 0;
     let lastTime = new Date(ticket.createdAt).getTime();
-    let runningStatus: string = sortedHistories.length > 0 && sortedHistories[0].fromStatus ? sortedHistories[0].fromStatus : "NEW";
+    let runningStatus: string = sortedHistories.length > 0 && sortedHistories[0].fromStatus ? sortedHistories[0].fromStatus : "OPEN";
 
     const isActiveWorkingStatus = (s: string) => s === "OPEN" || s === "IN_PROGRESS";
     const isResolvedOrClosed = (s: string) => s === "RESOLVED" ;
@@ -455,12 +454,21 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
 
     if (days > 0) {
       const remHours = hours % 24;
-      return `${days}d ${remHours}h`;
+      return {
+        display: `${days}d ${remHours}`,
+        seconds: seconds
+      };
     } else if (hours > 0) {
       const remMins = minutes % 60;
-      return `${hours}h ${remMins}m`;
+      return {
+        display : `${hours}h ${remMins}m`,
+        seconds : seconds
+      };
     } else {
-      return `${Math.max(1, minutes)}m`;
+      return {
+        display : `${Math.max(1,minutes)}m`,
+        seconds : seconds
+      };
     }
   };
 
@@ -502,7 +510,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
           {/* Reopen Ticket option for Requesters */}
           {(!isStaff || ticket.requesterId === currentUser.id )&& ["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <button
-              onClick={handleReopen}
+              onClick={()=>handleStatusChange(TicketStatus.REOPENED)}
               className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer flex items-center gap-1.5"
             >
               <RotateCw size={14} /> Reopen Ticket
@@ -511,7 +519,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
 
           {isStaff && ticket.requesterId !== currentUser.id && !["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <button
-              onClick={()=>handleStatusChange(TicketStatus.OPEN)}
+              onClick={()=>handleStatusChange(TicketStatus.RESOLVED)}
               className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
             >
               Resolve Ticket
@@ -528,8 +536,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
               >
                 <option value="OPEN">OPEN</option>
                 <option value="IN_PROGRESS">IN PROGRESS</option>
-                <option value="PENDING">ON-HOLD</option>
-                <option value="RESOLVED">RESOLVED</option>
+                <option value="ON_HOLD">ON-HOLD</option>
               </select>
             </div>
           )}
@@ -580,12 +587,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                   Priority: {ticket.priority}
                 </span>
 
-                {/* Internal priority for staff only */}
-                {isStaff && (
-                  <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-                    Internal: {ticket.internalPriority}
-                  </span>
-                )}
+                
               </div>
             </div>
 
@@ -785,11 +787,11 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
           </div>
 
           {/* VIEW: TICKET STATUS HISTORY (GLOBAL ADMIN ONLY) */}
-          {currentUser.role === "GLOBAL_ADMIN" && (
+          {isdepartmentHeads && (
             <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl p-6">
               <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
                 <Clock size={16} className="text-slate-500" />
-                Ticket Status History (Global Admin)
+                Ticket Status History 
               </h2>
               {statusHistories.length === 0 ? (
                 <p className="text-slate-400 italic text-xs text-center py-4">No status changes have been recorded for this ticket.</p>
@@ -864,7 +866,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             <h2 className="text-sm font-semibold text-zinc-900 border-b border-zinc-100 pb-2">Status & SLA Summary</h2>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block mb-1">State</span>
+                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block mb-1">Status</span>
                 <span
                   className={`inline-block text-xs font-bold px-2 py-0.5 ${
                       ticket.status === "OPEN"
@@ -890,7 +892,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             </div>
 
             {/* SLA countdown clock */}
-            {ticket.slaDeadline && (
+            {ticket.slaDeadline && ticket.status !=  "RESOLVED" ? (
               <div className="pt-3 border-t border-zinc-100">
                 <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block mb-1 flex items-center gap-1">
                   <Clock size={11} /> SLA Deadline
@@ -902,7 +904,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                   Deadline: {new Date(ticket.slaDeadline).toLocaleString()}
                 </span>
               </div>
-            )}
+            ):null}
 
             {/* Turnaround Time (TAT) */}
             <div className="pt-3 border-t border-zinc-100">
@@ -910,7 +912,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                 <Clock size={11} /> Turnaround Time (TAT)
               </span>
               <div className="p-2 border border-zinc-200 bg-zinc-50 text-xs font-mono font-semibold text-zinc-800">
-                {getTurnaroundTime()} {["RESOLVED", "CLOSED"].includes(ticket.status) ? "(Resolved)" : "(Active)"}
+                {getTurnaroundTime().display} {["RESOLVED", "CLOSED"].includes(ticket.status) ? "(Resolved)" : "(Active)"}
               </div>
               <span className="text-[10px] text-zinc-400 font-mono mt-1 block">
                 Excludes time spent on hold (Pending)
@@ -962,19 +964,19 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             </div>
 
             {/* Staff Assignment actions or locked notice */}
-            {isStaff && (
+            {isStaff && currentUser.id == ticket.assigneeId && (
               ["RESOLVED", "CLOSED"].includes(ticket.status) ? (
-                <div className="p-3 bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2 mt-3 rounded-lg">
-                  <Lock size={14} />
+                <div className="p-3 flex   bg-slate-50 border border-slate-200 text-slate-500 text-xs items-center gap-2 mt-3 rounded-lg">
+                  <Lock size={20} />
                   Assignment modifications are disabled as this ticket is now <strong>{ticket.status}</strong>.
                 </div>
               ) : (
-               metric.assignedTickets > 5 ? (
-               <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
+               metric.assignedTickets >= 3  ? (
+               <div className="pt-3 border-t border-slate-100  space-y-2 w-full">
+                <div className="flex w-full">
                     <button
                       onClick={() => setShowAssignForm(!showAssignForm)}
-                      className="flex justify-center items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs py-2 rounded-lg cursor-pointer font-semibold transition-colors"
+                      className="flex justify-center w-full items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs py-2 rounded-lg cursor-pointer font-semibold transition-colors"
                     >
                       Manual Assign
                     </button>
@@ -991,7 +993,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                         required
                       >
                         <option value="">-- Choose Agent --</option>
-                        {availableAgents.map((agent) => (
+                        {availableAgents.filter(agent => agent.id !== currentUser.id).map((agent) => (
                           <option key={agent.id} value={agent.id}>
                             {agent.fullName} ({agent.role} - {agent.supportLevel || "L1"})
                           </option>

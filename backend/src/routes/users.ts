@@ -14,10 +14,4 @@ userRouter.get("/:id", requireAuth, userController.getById);
 
 userRouter.get('/metric/:id',requireAuth,userController.metric)
 
-// Admin-only: role/department/manager/support-level/capacity changes.
-userRouter.patch(
-  "/:id",
-  requireAuth,
-  requireRole(UserRole.GLOBAL_ADMIN, UserRole.DEPT_MANAGER),
-  userController.update
-);
+userRouter.patch("/reset/:id",requireAuth,userController.resetPassword)

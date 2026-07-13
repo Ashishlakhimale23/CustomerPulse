@@ -9,95 +9,17 @@ const TEST_PASSWORD = "ChangeMe123!";
 
 // client list 
 
-export const CLIENT_OPTIONS: string[] = [
-  "AADITYA FINANCE & VENTURES",
-  "AASIAN SHIPPING AGENCIES",
-  "ABC CT RE PARK (01) PRIVATE LI",
-  "Afcons Infrastructure",
-  "AIRPOWER WINDFARMS PRIVATE LIM",
-  "AMPIN ENERGY TRANSITION PRIVAT",
-  "AMPIN ENERGY TRANSITION PVT LT",
-  "ANKUR BIOCHEM PRIVATE LIMITED",
-  "AXIS ENERGY VENTURES INDIA PRI",
-  "BHARAT HEAVY ELECTRICALS LIMIT",
-  "CHENNAI RADHA ENGINEERING WORK",
-  "CLEAN MAX ENVIRO ENERGY SOLUTI",
-  "DATTA POWER INFRA PRIVATE LIMI",
-  "DEEPAK FERTILISERS AND PETROCH",
-  "FABTON INFRAPROJECTS PRIVATE L",
-  "GARDEN REACH SHIPBUILDERS",
-  "HAJEE A.P. BAVA & CO CONSTRUCT",
-  "HERRENKNECHT INDIA PRIVATE LIM",
-  "IRIS ONE PRIVATE LIMITED",
-  "IRIS RENEWABLES TWO PRIVATE LI",
-  "JINDAL ENERGY BOTSWANA PTY. LI",
-  "JINDAL PROJECTS AND ENGINEERS",
-  "JNK INDIA LIMITED",
-  "JSW RENEWABLE ENERGY",
-  "JSW Steel",
-  "KAZE ENERGY LIMITED",
-  "KP ENERGY LIMITED",
-  "L&T CONSTRUCTION - WET IC",
-  "L&T MMH",
-  "LARSEN & TOUBRO LIMITED",
-  "M/S AKASH CONSTRUCTION",
-  "M/S GANMUKH & CO",
-  "M/S KALPATARU PROJECTS INTERNA",
-  "M/S WONDER CEMENT LIMITED",
-  "M/S. PURANMAL",
-  "MITSUBISHI POWER INDIA PVT. LT",
-  "MTANDT RENTALS LIMITED",
-  "MUSKAN METALLISING COMPANY",
-  "NAYARA ENERGY LIMITED",
-  "NUCLEAR POWER CORPORATION",
-  "OMEGA INFRAENGINEERS PRIVATE L",
-  "ORISSA ALLOY STEEL PVT LIMITED",
-  "PROZEAL GREEN ENERGY LIMITED",
-  "PSP PROJECTS LIMITED",
-  "PRAJ INDUSTRIES",
-  "Radient Hi Tech Engineering",
-  "Rashmi Group",
-  "RELIANCE INDUSTRIES LIMITED",
-  "RENEW WIND ENERGY (JAMB) PRIVA",
-  "RENEW WIND ENERGY (RAJASTHAN 2",
-  "RINNOVABILE ENERGY PRIVATE LIM",
-  "RINNOVATORE ENERGY",
-  "RSB PROJECTS PRIVATE LIMITED",
-  "SAISEI ENERGY INDIA",
-  "SERENTICA RENEWABLES INDIA 6 P",
-  "SERENTICA RENEWABLES INDIA PRI",
-  "SFRPL",
-  "SHYAM SEL AND POWER LTD.",
-  "SMS LIMITED",
-  "SOLARCRAFT POWER",
-  "SORIGIN RE SERVICES PRIVATE LI",
-  "SUZLON SOUTHERN INDIA PROJECTS",
-  "SUZLON SOUTHERN PROJECTS LIMIT",
-  "SUZLON WESTERN",
-  "SUZLON WESTERN INDIA PROJECTS",
-  "TATA POWER RENEWABLES ENERGY L",
-  "TATA PROJECTS LIMITED",
-  "TATA STEEL LIMITED",
-  "TEQ GREEN POWER XI PRIVATE LIM",
-  "THE INDIA CEMENTS LIMITED",
-  "THERMAX BABCOCK & WILCOX ENERG",
-  "THERMAX LIMITED",
-  "TORRENT SOLAR POWER PRIVATE LI",
-  "TOYO ENGINEERING INDIA PRIVATE",
-  "TP TECH ENGINEERING",
-  "UDUPI COCHIN SHIPYARD LIMITED",
-  "ULTRATECH CEMENT LIMITED",
-  "UPC RENEWABLES INDIA PRIVATE L",
-  "VADRAJ CEMENT LIMITED",
-  "VEH JAYIN RENEWABLES",
-  "VENA ENERGY SUSTAINABLE POWER",
-  "ISGEC Heavy Engineering",
-  "Shree Cement",
-  "Nordex",
-  "Blueleaf Energy",
-  "BluPine Energy",
-  "Daynite Engineers",
-  "Wonder Cement",
+export const CLIENT_OPTIONS: {
+    name : string,
+    projectName : string,
+  }[] = [
+  {
+    name : "AADITYA FINANCE & VENTURES",
+    projectName : "finance"
+  },{
+    name : "AASIAN SHIPPING AGENCIES" ,
+    projectName : "shipping",
+  }
 ];
 
 
@@ -147,7 +69,7 @@ const DEPARTMENTS: Record<string,
   Safety: {
     description: "Health, safety, and incident reporting",
     categories: [
-      { name: "Incident Report", defaultSlaHours: 1, defaultPriority: TicketPriority.P1, minSupportLevel: SupportLevel.L3 },
+      { name: "Incident Report", defaultSlaHours: 1, defaultPriority: TicketPriority.P1, minSupportLevel: SupportLevel.L2 },
       { name: "Near Miss", defaultSlaHours: 8, defaultPriority: TicketPriority.P2, minSupportLevel: SupportLevel.L2 },
       { name: "Safety Equipment Request", defaultSlaHours: 24, defaultPriority: TicketPriority.P3, minSupportLevel: SupportLevel.L1 },
       { name: "Compliance / Audit", defaultSlaHours: 48, defaultPriority: TicketPriority.P4, minSupportLevel: SupportLevel.L2 },
@@ -265,11 +187,6 @@ async function main() {
       data: { name: deptName, description: deptData.description },
     });
 
-    // Give the admin a home department (first one created) so
-    // department-scoped invites/actions have a sensible default.
-    if (deptName === "IT Support") {
-      await prisma.user.update({ where: { id: globalAdmin.id }, data: { departmentId: department.id } });
-    }
 
     await prisma.ticketCategory.createMany({
       data: deptData.categories.map((c) => ({
@@ -277,7 +194,6 @@ async function main() {
         name: c.name,
         defaultSlaHours: c.defaultSlaHours,
         defaultPriority: c.defaultPriority,
-        minSupportLevel: c.minSupportLevel,
       })),
     });
 
@@ -294,8 +210,9 @@ async function main() {
   
 
     await prisma.client.createMany({
-      data: CLIENT_OPTIONS.map((name) => ({
-        name,
+      data: CLIENT_OPTIONS.map((client) => ({
+        name : client.name,
+        projectName : client.projectName
       })),
       skipDuplicates: true, // Prevents duplicate inserts
     });

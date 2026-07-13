@@ -1,0 +1,551 @@
+/**
+ * dashboard-queries.ts
+ * ---------------------------------------------------------------------------
+ * Pure Prisma query functions for the CXO Executive Overview dashboard.
+ * No Express/Next.js/Nest wiring here on purpose — wire these into whatever
+ * router you're using. Every function takes plain arguments and returns
+ * plain data, so they drop straight into a route handler, a tRPC procedure,
+ * a GraphQL resolver, whatever.
+ *
+ * Adjust the import path below to wherever your generated client actually
+ * lives (per your schema's `generator client { output = "../src/generated/prisma" }`).
+ * ---------------------------------------------------------------------------
+ *
+ * SCOPING RULE (per your answer):
+ * A CXO's departments = every department that has a DEPT_MANAGER anywhere
+ * in their downward reporting chain (direct OR indirect — CXO -> manager ->
+ * manager -> DEPT_MANAGER all counts). That requires walking the recursive
+ * `managerId` self-relation on User, which Prisma's query builder can't do
+ * natively, so getCxoDepartmentIds() uses one raw recursive CTE (Postgres-only,
+ * matches your datasource provider) and everything downstream is plain
+ * Prisma using the resulting department id list.
+ *
+ * SNAPSHOT vs PERIOD ACTIVITY — an explicit design choice, not an oversight:
+ * "Open / In Progress / On Hold" counts are LIVE, current-state counts.
+ * They don't change when you flip between 7d/30d/12m in the UI — a ticket
+ * that's open right now is open right now, regardless of the date filter.
+ * "Created / Resolved / SLA breaches / Avg TAT" ARE period-bound — they
+ * describe what happened during the selected window. If you want the old
+ * mock-data behaviour (open/onHold also scaling with the period), that's
+ * not really correct product behaviour, so it isn't reproduced here; flag
+ * it if you actually want backlog counts to be date-bounded too (e.g.
+ * "open tickets that were opened in the last 30 days").
+ */
+
+import { PrismaClient, TicketStatus, TicketPriority, UserRole, Prisma } from "../src/generated/prisma";
+
+export const prisma = new PrismaClient();
+
+// ============================================================================
+// Shared types
+// ============================================================================
+
+export interface DateRange {
+  start: Date;
+  end: Date;
+}
+
+export type Granularity = "day" | "month";
+
+export interface KpiTotals {
+  liveOpen: number;
+  liveInProgress: number;
+  liveOnHold: number;
+  liveBreachedUnresolved: number;
+  periodCreated: number;
+  periodResolved: number;
+  periodSlaBreached: number;
+  slaCompliancePct: number | null; // null = no resolved tickets in period to score
+  avgTatHours: number | null;
+}
+
+export interface DepartmentPulseRow {
+  departmentId: string;
+  name: string;
+  open: number;
+  inProgress: number;
+  onHold: number;
+  resolved: number; // resolved within the period
+  total: number;
+  slaCompliancePct: number | null;
+}
+
+export interface VolumeTrendPoint {
+  bucket: string; // "2026-07-05" for day granularity, "2026-07" for month
+  created: number;
+  resolved: number;
+}
+
+export interface SlaTrendPoint {
+  bucket: string;
+  [departmentId: string]: string | number | null;
+}
+
+export interface PriorityMix {
+  P1: number;
+  P2: number;
+  P3: number;
+  P4: number;
+}
+
+export interface AtRiskTicket {
+  id: string;
+  ticketNumber: string;
+  title: string;
+  departmentId: string;
+  departmentName: string;
+  priority: TicketPriority;
+  ageHours: number;
+  assigneeName: string | null;
+  status: "Breached" | "At risk";
+  slaDeadline: Date | null;
+}
+
+export interface DepartmentPerformanceRow {
+  departmentId: string;
+  name: string;
+  managerName: string | null;
+  agentCount: number;
+  liveOpenTickets: number;
+  openTicketsPerAgent: number | null;
+  avgTatHours: number | null;
+  avgTatDeltaPct: number | null; // vs the immediately preceding equal-length period
+  periodSlaBreached: number;
+  slaCompliancePct: number | null;
+}
+
+export interface CxoDashboardData {
+  departmentIds: string[];
+  granularity: Granularity;
+  kpis: KpiTotals;
+  departmentPulse: DepartmentPulseRow[];
+  volumeTrend: VolumeTrendPoint[];
+  slaTrend: SlaTrendPoint[];
+  priorityMix: PriorityMix;
+  atRiskTickets: AtRiskTicket[];
+  departmentPerformance: DepartmentPerformanceRow[];
+}
+
+// ============================================================================
+// 1. CXO -> department scoping
+// ============================================================================
+
+/**
+ * Returns every department id that has a DEPT_MANAGER anywhere in the given
+ * CXO's downward reporting chain (direct or indirect reports).
+ */
+export async function getCxoDepartmentIds(cxoId: string): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ departmentId: string }[]>(Prisma.sql`
+    WITH RECURSIVE org_chain AS (
+      SELECT id FROM "User" WHERE id = ${cxoId}
+      UNION ALL
+      SELECT u.id
+      FROM "User" u
+      INNER JOIN org_chain oc ON u."managerId" = oc.id
+    )
+    SELECT DISTINCT u."departmentId" AS "departmentId"
+    FROM "User" u
+    INNER JOIN org_chain oc ON u.id = oc.id
+    WHERE u.role = 'DEPT_MANAGER' AND u."departmentId" IS NOT NULL
+  `);
+  return rows.map((r) => r.departmentId);
+}
+
+// ============================================================================
+// 2. Date bucketing helpers
+// ============================================================================
+
+export function resolveGranularity(range: DateRange): Granularity {
+  const days = (range.end.getTime() - range.start.getTime()) / 86_400_000;
+  return days <= 35 ? "day" : "month";
+}
+
+/** Returns the immediately preceding period of the same length, for delta comparisons. */
+export function getPreviousRange(range: DateRange): DateRange {
+  const durationMs = range.end.getTime() - range.start.getTime();
+  return {
+    start: new Date(range.start.getTime() - durationMs),
+    end: new Date(range.start.getTime() - 1),
+  };
+}
+
+function bucketKey(date: Date, granularity: Granularity): string {
+  return granularity === "day" ? date.toISOString().slice(0, 10) : date.toISOString().slice(0, 7);
+}
+
+/** Every bucket key between range.start and range.end, so trend charts don't have gaps. */
+function enumerateBuckets(range: DateRange, granularity: Granularity): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(range.start);
+  while (cursor <= range.end) {
+    keys.push(bucketKey(cursor, granularity));
+    if (granularity === "day") cursor.setDate(cursor.getDate() + 1);
+    else cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return keys;
+}
+
+// ============================================================================
+// 3. KPI totals (org-wide or single-department, depending on the ids you pass)
+// ============================================================================
+
+export async function getKpiTotals(departmentIds: string[], range: DateRange): Promise<KpiTotals> {
+  const [liveGroups, liveBreachedUnresolved, periodCreated, resolvedInPeriod] = await Promise.all([
+    prisma.ticket.groupBy({
+      by: ["status"],
+      where: { departmentId: { in: departmentIds } },
+      _count: { _all: true },
+    }),
+    prisma.ticket.count({
+      where: {
+        departmentId: { in: departmentIds },
+        slaBreached: true,
+        status: { not: TicketStatus.RESOLVED },
+      },
+    }),
+    prisma.ticket.count({
+      where: {
+        departmentId: { in: departmentIds },
+        createdAt: { gte: range.start, lte: range.end },
+      },
+    }),
+    prisma.ticket.findMany({
+      where: {
+        departmentId: { in: departmentIds },
+        resolvedAt: { gte: range.start, lte: range.end },
+      },
+      select: { createdAt: true, resolvedAt: true, slaBreached: true },
+    }),
+  ]);
+
+  const liveOpen = liveGroups.find((g) => g.status === TicketStatus.OPEN)?._count._all ?? 0;
+  const liveInProgress = liveGroups.find((g) => g.status === TicketStatus.IN_PROGRESS)?._count._all ?? 0;
+  const liveOnHold = liveGroups.find((g) => g.status === TicketStatus.ON_HOLD)?._count._all ?? 0;
+
+  const periodResolved = resolvedInPeriod.length;
+  const periodSlaBreached = resolvedInPeriod.filter((t) => t.slaBreached).length;
+  const slaCompliancePct =
+    periodResolved > 0 ? Math.round(((periodResolved - periodSlaBreached) / periodResolved) * 100) : null;
+
+  const tatHoursList = resolvedInPeriod
+    .filter((t) => t.resolvedAt)
+    .map((t) => (t.resolvedAt!.getTime() - t.createdAt.getTime()) / 3_600_000);
+  const avgTatHours =
+    tatHoursList.length > 0 ? tatHoursList.reduce((a, b) => a + b, 0) / tatHoursList.length : null;
+
+  return {
+    liveOpen,
+    liveInProgress,
+    liveOnHold,
+    liveBreachedUnresolved,
+    periodCreated,
+    periodResolved,
+    periodSlaBreached,
+    slaCompliancePct,
+    avgTatHours,
+  };
+}
+
+// ============================================================================
+// 4. Department pulse — per-department live status mix + period SLA%
+// ============================================================================
+
+export async function getDepartmentPulse(
+  departmentIds: string[],
+  range: DateRange
+): Promise<DepartmentPulseRow[]> {
+  const departments = await prisma.department.findMany({
+    where: { id: { in: departmentIds } },
+    select: { id: true, name: true },
+  });
+
+  const rows = await Promise.all(
+    departments.map(async (dept): Promise<DepartmentPulseRow> => {
+      const [liveGroups, resolvedInPeriod] = await Promise.all([
+        prisma.ticket.groupBy({
+          by: ["status"],
+          where: { departmentId: dept.id },
+          _count: { _all: true },
+        }),
+        prisma.ticket.findMany({
+          where: { departmentId: dept.id, resolvedAt: { gte: range.start, lte: range.end } },
+          select: { slaBreached: true },
+        }),
+      ]);
+
+      const open = liveGroups.find((g) => g.status === TicketStatus.OPEN)?._count._all ?? 0;
+      const inProgress = liveGroups.find((g) => g.status === TicketStatus.IN_PROGRESS)?._count._all ?? 0;
+      const onHold = liveGroups.find((g) => g.status === TicketStatus.ON_HOLD)?._count._all ?? 0;
+      const resolved = resolvedInPeriod.length;
+      const breached = resolvedInPeriod.filter((t) => t.slaBreached).length;
+
+      return {
+        departmentId: dept.id,
+        name: dept.name,
+        open,
+        inProgress,
+        onHold,
+        resolved,
+        total: open + inProgress + onHold + resolved,
+        slaCompliancePct: resolved > 0 ? Math.round(((resolved - breached) / resolved) * 100) : null,
+      };
+    })
+  );
+
+  return rows.sort((a, b) => b.total - a.total);
+}
+
+// ============================================================================
+// 5. Ticket volume trend — created vs resolved, bucketed by day or month
+// ============================================================================
+
+export async function getVolumeTrend(
+  departmentIds: string[],
+  range: DateRange,
+  granularity: Granularity = resolveGranularity(range)
+): Promise<VolumeTrendPoint[]> {
+  const [created, resolved] = await Promise.all([
+    prisma.ticket.findMany({
+      where: { departmentId: { in: departmentIds }, createdAt: { gte: range.start, lte: range.end } },
+      select: { createdAt: true },
+    }),
+    prisma.ticket.findMany({
+      where: { departmentId: { in: departmentIds }, resolvedAt: { gte: range.start, lte: range.end } },
+      select: { resolvedAt: true },
+    }),
+  ]);
+
+  const createdByBucket = new Map<string, number>();
+  for (const t of created) {
+    const key = bucketKey(t.createdAt, granularity);
+    createdByBucket.set(key, (createdByBucket.get(key) ?? 0) + 1);
+  }
+  const resolvedByBucket = new Map<string, number>();
+  for (const t of resolved) {
+    const key = bucketKey(t.resolvedAt!, granularity);
+    resolvedByBucket.set(key, (resolvedByBucket.get(key) ?? 0) + 1);
+  }
+
+  return enumerateBuckets(range, granularity).map((bucket) => ({
+    bucket,
+    created: createdByBucket.get(bucket) ?? 0,
+    resolved: resolvedByBucket.get(bucket) ?? 0,
+  }));
+}
+
+// ============================================================================
+// 6. SLA compliance trend — per department, bucketed by day or month
+// ============================================================================
+
+export async function getSlaComplianceTrend(
+  departmentIds: string[],
+  range: DateRange,
+  granularity: Granularity = resolveGranularity(range)
+): Promise<SlaTrendPoint[]> {
+  const resolvedTickets = await prisma.ticket.findMany({
+    where: { departmentId: { in: departmentIds }, resolvedAt: { gte: range.start, lte: range.end } },
+    select: { departmentId: true, resolvedAt: true, slaBreached: true },
+  });
+
+  // bucket -> departmentId -> { resolved, breached }
+  const grid = new Map<string, Map<string, { resolved: number; breached: number }>>();
+  for (const t of resolvedTickets) {
+    const bucket = bucketKey(t.resolvedAt!, granularity);
+    if (!grid.has(bucket)) grid.set(bucket, new Map());
+    const deptMap = grid.get(bucket)!;
+    const cur = deptMap.get(t.departmentId) ?? { resolved: 0, breached: 0 };
+    cur.resolved += 1;
+    if (t.slaBreached) cur.breached += 1;
+    deptMap.set(t.departmentId, cur);
+  }
+
+  return enumerateBuckets(range, granularity).map((bucket) => {
+    const row: SlaTrendPoint = { bucket };
+    const deptMap = grid.get(bucket);
+    for (const deptId of departmentIds) {
+      const cell = deptMap?.get(deptId);
+      row[deptId] = cell && cell.resolved > 0 ? Math.round(((cell.resolved - cell.breached) / cell.resolved) * 100) : null;
+    }
+    return row;
+  });
+}
+
+// ============================================================================
+// 7. Priority mix (tickets created within the period)
+// ============================================================================
+
+export async function getPriorityMix(departmentIds: string[], range: DateRange): Promise<PriorityMix> {
+  const groups = await prisma.ticket.groupBy({
+    by: ["priority"],
+    where: { departmentId: { in: departmentIds }, createdAt: { gte: range.start, lte: range.end } },
+    _count: { _all: true },
+  });
+
+  return {
+    P1: groups.find((g) => g.priority === TicketPriority.P1)?._count._all ?? 0,
+    P2: groups.find((g) => g.priority === TicketPriority.P2)?._count._all ?? 0,
+    P3: groups.find((g) => g.priority === TicketPriority.P3)?._count._all ?? 0,
+    P4: groups.find((g) => g.priority === TicketPriority.P4)?._count._all ?? 0,
+  };
+}
+
+// ============================================================================
+// 8. At-risk / breached tickets — live backlog, not date-bounded
+// ============================================================================
+
+export async function getAtRiskTickets(
+  departmentIds: string[],
+  opts: { limit?: number; warningHours?: number } = {}
+): Promise<AtRiskTicket[]> {
+  const { limit = 20, warningHours = 8 } = opts;
+  const warningThreshold = new Date(Date.now() + warningHours * 3_600_000);
+
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      departmentId: { in: departmentIds },
+      status: { not: TicketStatus.RESOLVED },
+      priority: { in: [TicketPriority.P1, TicketPriority.P2] },
+      OR: [{ slaBreached: true }, { slaDeadline: { lte: warningThreshold } }],
+    },
+    select: {
+      id: true,
+      ticketNumber: true,
+      title: true,
+      priority: true,
+      createdAt: true,
+      slaBreached: true,
+      slaDeadline: true,
+      department: { select: { id: true, name: true } },
+      assignee: { select: { fullName: true } },
+    },
+    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+    take: limit,
+  });
+
+  const now = Date.now();
+  return tickets.map((t) => ({
+    id: t.id,
+    ticketNumber: t.ticketNumber,
+    title: t.title,
+    departmentId: t.department.id,
+    departmentName: t.department.name,
+    priority: t.priority,
+    ageHours: Math.round((now - t.createdAt.getTime()) / 3_600_000),
+    assigneeName: t.assignee?.fullName ?? null,
+    status: t.slaBreached ? "Breached" : "At risk",
+    slaDeadline: t.slaDeadline,
+  }));
+}
+
+// ============================================================================
+// 9. Department performance table
+// ============================================================================
+
+export async function getDepartmentPerformance(
+  departmentIds: string[],
+  range: DateRange
+): Promise<DepartmentPerformanceRow[]> {
+  const previousRange = getPreviousRange(range);
+
+  const departments = await prisma.department.findMany({
+    where: { id: { in: departmentIds } },
+    select: { id: true, name: true },
+  });
+
+  return Promise.all(
+    departments.map(async (dept): Promise<DepartmentPerformanceRow> => {
+      const [manager, agentCount, liveOpenTickets, resolvedThisPeriod, resolvedPrevPeriod] = await Promise.all([
+        prisma.user.findFirst({
+          where: { departmentId: dept.id, role: UserRole.DEPT_MANAGER },
+          select: { fullName: true },
+        }),
+        prisma.user.count({ where: { departmentId: dept.id, role: UserRole.AGENT, isActive: true } }),
+        prisma.ticket.count({ where: { departmentId: dept.id, status: TicketStatus.OPEN } }),
+        prisma.ticket.findMany({
+          where: { departmentId: dept.id, resolvedAt: { gte: range.start, lte: range.end } },
+          select: { createdAt: true, resolvedAt: true, slaBreached: true },
+        }),
+        prisma.ticket.findMany({
+          where: { departmentId: dept.id, resolvedAt: { gte: previousRange.start, lte: previousRange.end } },
+          select: { createdAt: true, resolvedAt: true },
+        }),
+      ]);
+
+      const avgHours = (rows: { createdAt: Date; resolvedAt: Date | null }[]) => {
+        const list = rows.filter((r) => r.resolvedAt).map((r) => (r.resolvedAt!.getTime() - r.createdAt.getTime()) / 3_600_000);
+        return list.length > 0 ? list.reduce((a, b) => a + b, 0) / list.length : null;
+      };
+
+      const avgTatHours = avgHours(resolvedThisPeriod);
+      const avgTatPrev = avgHours(resolvedPrevPeriod);
+      const avgTatDeltaPct =
+        avgTatHours !== null && avgTatPrev !== null && avgTatPrev !== 0
+          ? Math.round(((avgTatHours - avgTatPrev) / avgTatPrev) * 1000) / 10
+          : null;
+
+      const periodSlaBreached = resolvedThisPeriod.filter((t) => t.slaBreached).length;
+      const slaCompliancePct =
+        resolvedThisPeriod.length > 0
+          ? Math.round(((resolvedThisPeriod.length - periodSlaBreached) / resolvedThisPeriod.length) * 100)
+          : null;
+
+      return {
+        departmentId: dept.id,
+        name: dept.name,
+        managerName: manager?.fullName ?? null,
+        agentCount,
+        liveOpenTickets,
+        openTicketsPerAgent: agentCount > 0 ? Math.round((liveOpenTickets / agentCount) * 10) / 10 : null,
+        avgTatHours,
+        avgTatDeltaPct,
+        periodSlaBreached,
+        slaCompliancePct,
+      };
+    })
+  );
+}
+
+// ============================================================================
+// 10. Convenience aggregator — one call, matches the dashboard UI 1:1
+// ============================================================================
+
+export async function getCxoDashboardData(
+  cxoId: string,
+  range: DateRange,
+  opts: { departmentId?: string; granularity?: Granularity } = {}
+): Promise<CxoDashboardData> {
+  const scopedDepartmentIds = await getCxoDepartmentIds(cxoId);
+
+  let departmentIds = scopedDepartmentIds;
+  if (opts.departmentId) {
+    if (!scopedDepartmentIds.includes(opts.departmentId)) {
+      throw new Error(`Department ${opts.departmentId} is not in this CXO's scope`);
+    }
+    departmentIds = [opts.departmentId];
+  }
+
+  const granularity = opts.granularity ?? resolveGranularity(range);
+
+  const [kpis, departmentPulse, volumeTrend, slaTrend, priorityMix, atRiskTickets, departmentPerformance] =
+    await Promise.all([
+      getKpiTotals(departmentIds, range),
+      getDepartmentPulse(departmentIds, range),
+      getVolumeTrend(departmentIds, range, granularity),
+      getSlaComplianceTrend(departmentIds, range, granularity),
+      getPriorityMix(departmentIds, range),
+      getAtRiskTickets(departmentIds),
+      getDepartmentPerformance(departmentIds, range),
+    ]);
+
+  return {
+    departmentIds,
+    granularity,
+    kpis,
+    departmentPulse,
+    volumeTrend,
+    slaTrend,
+    priorityMix,
+    atRiskTickets,
+    departmentPerformance,
+  };
+}

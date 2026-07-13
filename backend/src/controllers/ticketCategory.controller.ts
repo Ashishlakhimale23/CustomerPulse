@@ -13,7 +13,6 @@ export const ticketCategoryController = {
         name: req.body.name,
         defaultSlaHours: req.body.defaultSlaHours,
         defaultPriority: req.body.defaultPriority,
-        minSupportLevel: req.body.minSupportLevel,
       },
     });
     res.status(201).json(category);
@@ -35,10 +34,18 @@ export const ticketCategoryController = {
         name: req.body.name,
         defaultSlaHours: req.body.defaultSlaHours,
         defaultPriority: req.body.defaultPriority,
-        minSupportLevel: req.body.minSupportLevel,
       },
     });
     res.json(category);
   },
+
+  async delete(req:AuthedRequest,res:Response){
+    const deleteCategory = await prisma.ticketCategory.delete({
+      where : {id:req.params.id}
+    })
+    res.status(200).json({message:"delete the category"})
+  }
+
+
   
 };

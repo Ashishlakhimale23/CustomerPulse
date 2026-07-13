@@ -6,7 +6,7 @@ import { ASSIGNABLE_AGENT_ROLES } from "../utils/rbac";
 import { AppError } from "../middleware/errorHandler";
 
 
-const OPEN_STATUSES: TicketStatus[] = [ TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.PENDING];
+const OPEN_STATUSES: TicketStatus[] = [ TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD];
 
 export const assignmentService = {
   /**
@@ -48,10 +48,11 @@ export const assignmentService = {
       });
 
       const eligible = categoryAgents
-        .filter((ca) => ca.agent.isActive && ca.agent.isAvailableForAssignment)
+        .filter((ca)=>ticket.requesterId == ca.id)
         .filter((ca) => !ticket.supportLevel || ca.agent.supportLevel === ticket.supportLevel)
         .map((ca) => ({ agent: ca.agent, proficiency: ca.proficiency, openCount: ca.agent.ticketsAssigned.length }))
-        .filter((c) => c.openCount < c.agent.maxActiveTickets);
+        
+        
 
       if (eligible.length > 0) {
         eligible.sort((a, b) => b.proficiency - a.proficiency || a.openCount - b.openCount);
@@ -64,10 +65,8 @@ export const assignmentService = {
     // ---- 2. Keyword/skill match (fallback when no category, or category has no agents) ----
     const candidates = await prisma.user.findMany({
       where: {
-        departmentId: ticket.departmentId,
+        agentsdepartmentId: ticket.departmentId,
         role: { in: ASSIGNABLE_AGENT_ROLES },
-        isActive: true,
-        isAvailableForAssignment: true,
         ...(ticket.supportLevel ? { supportLevel: ticket.supportLevel } : {}),
       },
       include: {
@@ -81,8 +80,10 @@ export const assignmentService = {
     const ticketKeywordIds = new Set(ticket.keywords.map((k) => k.keywordId));
 
     const scored = candidates
+      .filter((agent) => agent.id != ticket.requesterId)
       .map((agent) => {
         const skillScore = agent.skills
+          
           .filter((s) => ticketKeywordIds.has(s.keywordId))
           .reduce((sum, s) => sum + s.proficiency, 0);
         const openCount = agent.ticketsAssigned.length;

@@ -17,7 +17,22 @@ export const departmentController = {
   // GET /departments
   async list(req: AuthedRequest, res: Response) {
     const departments = await prisma.department.findMany({
-      include: { _count: { select: { users: true, tickets: true } } },
+      select: {
+        _count: { select: { agents: true, tickets: true, } },
+        id : true,
+        name : true,  
+        description : true, 
+        cxo: {
+          select: {
+            fullName: true
+          },
+        },
+        manager:{
+          select :{ 
+            fullName :true
+          }
+        }
+      },
     });
     res.json(departments);
   },
@@ -27,7 +42,7 @@ export const departmentController = {
   async getById(req: AuthedRequest, res: Response) {
     const department = await prisma.department.findUnique({
       where: { id: req.params.id },
-      include: { users: true, categories: true, keywords: true },
+      include: { agents: true, categories: true, keywords: true },
     });
     if (!department) return res.status(404).json({ error: "Not found" });
     res.json(department);
@@ -41,4 +56,11 @@ export const departmentController = {
     });
     res.json(department);
   },
+
+  async delete(req:AuthedRequest,res:Response){
+    const deleteDepartment = await prisma.department.delete({
+      where : {id : req.params.id},
+    })
+    res.status(200).json({message:"department deleted"})
+  }
 };

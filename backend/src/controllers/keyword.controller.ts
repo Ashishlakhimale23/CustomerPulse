@@ -26,6 +26,13 @@ export const keywordController = {
     res.json(keywords);
   },
 
+  async delete(req:AuthedRequest,res:Response){
+    const deleteKeyword = await prisma.keyword.delete({
+      where:{id:req.params.id}
+    })
+    res.status(200).json({message:"keyword deleted"})
+  },
+
   // POST /keywords/agents/:userId/skills  { keywordIds: [] }  (admin onboarding an agent)
   async assignSkills(req: AuthedRequest, res: Response) {
     const result = await keywordService.assignSkillsToAgent(req.params.userId, req.body.keywordIds);

@@ -13,16 +13,16 @@ const rank = (p: TicketPriority) => ORDER.indexOf(p);
  */
 const ROLE_BASE_PRIORITY: Record<UserRole, TicketPriority> = {
   GLOBAL_ADMIN: TicketPriority.P2,
-  DEPT_MANAGER: TicketPriority.P2,
+  HOD: TicketPriority.P2,
   AGENT: TicketPriority.P3,
-  EMPLOYEE: TicketPriority.P3,
+  REQUESTER: TicketPriority.P3,
+  CXO: TicketPriority.P1
 };
 
 // Support-level floor: a ticket already requiring deep specialist
 // involvement (L3/L4) shouldn't be filed as trivial P4 regardless of role.
 const SUPPORT_LEVEL_FLOOR: Partial<Record<SupportLevel, TicketPriority>> = {
-  L4: TicketPriority.P1,
-  L3: TicketPriority.P2,
+  L1: TicketPriority.P1,
 };
 
 function mostUrgent(...priorities: TicketPriority[]): TicketPriority {
@@ -38,19 +38,15 @@ export const priorityService = {
    * on Ticket precisely to allow that split if you want it later.
    */
   computePriority(params: {
-    requesterRole: UserRole;
     categoryDefaultPriority?: TicketPriority | null;
-    requiredSupportLevel?: SupportLevel | null;
   }): TicketPriority {
-    const { requesterRole, categoryDefaultPriority, requiredSupportLevel } = params;
+    const {  categoryDefaultPriority } = params;
 
-    const roleBase = ROLE_BASE_PRIORITY[requesterRole] ?? TicketPriority.P3;
-    const candidates: TicketPriority[] = [roleBase];
+  
+    const candidates: TicketPriority[] = [];
 
     if (categoryDefaultPriority) candidates.push(categoryDefaultPriority);
-    if (requiredSupportLevel && SUPPORT_LEVEL_FLOOR[requiredSupportLevel]) {
-      candidates.push(SUPPORT_LEVEL_FLOOR[requiredSupportLevel]!);
-    }
+    if (!categoryDefaultPriority) candidates.push(TicketPriority.P3)
 
     return mostUrgent(...candidates);
   },

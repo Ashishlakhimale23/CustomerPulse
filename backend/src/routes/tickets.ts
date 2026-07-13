@@ -15,8 +15,8 @@ ticketRouter.patch("/:id", requireAuth, ticketController.update);
 ticketRouter.post("/:id/resolve", requireAuth, ticketController.resolve);
 ticketRouter.get("/assigned/:id",requireAuth,ticketController.getAssigned )
 ticketRouter.get("/breached/:id",requireAuth,ticketController.getBreachedTickets)
-ticketRouter.get("/unassigned/:id",requireAuth,ticketController.getUnassignedDepartmentTickets)
-
+ticketRouter.get("/resolved/:id",requireAuth,ticketController.resolved)
+ticketRouter.get("/onhold/:id",requireAuth,ticketController.onhold)
 // get all personal tickets
 ticketRouter.get("/mytickets/:id",requireAuth,ticketController.myTickets)
 
@@ -31,7 +31,7 @@ ticketRouter.get("/mytickets/:id",requireAuth,ticketController.myTickets)
 ticketRouter.post(
   "/:id/escalate",
   requireAuth,
-  requireRole(UserRole.AGENT, UserRole.DEPT_MANAGER, UserRole.GLOBAL_ADMIN),
+  requireRole(UserRole.AGENT, UserRole.HOD, UserRole.GLOBAL_ADMIN),
   ticketController.escalate
 );
 
@@ -43,12 +43,11 @@ ticketRouter.get("/:id/escalations", requireAuth, ticketController.listEscalatio
 ticketRouter.post(
   "/:id/assign",
   requireAuth,
-  requireRole(  UserRole.DEPT_MANAGER, UserRole.GLOBAL_ADMIN), ticketController.assign
+  ticketController.assign
 );
 ticketRouter.post(
   "/:id/reassign",
   requireAuth,
-  requireRole(UserRole.DEPT_MANAGER, UserRole.GLOBAL_ADMIN),
   ticketController.autoReassign
 );
 
@@ -62,13 +61,13 @@ ticketRouter.get("/:id/status-history",requireAuth,requireRole(UserRole.GLOBAL_A
 ticketRouter.post(
   "/:id/keywords",
   requireAuth,
-  requireRole(UserRole.AGENT, UserRole.DEPT_MANAGER, UserRole.GLOBAL_ADMIN),
+  requireRole(UserRole.AGENT, UserRole.HOD, UserRole.GLOBAL_ADMIN),
   ticketController.addKeyword
 );
 ticketRouter.delete(
   "/:id/keywords/:keywordId",
   requireAuth,
-  requireRole(UserRole.AGENT,  UserRole.DEPT_MANAGER, UserRole.GLOBAL_ADMIN),
+  requireRole(UserRole.AGENT,  UserRole.HOD, UserRole.GLOBAL_ADMIN),
   ticketController.removeKeyword
 );
 

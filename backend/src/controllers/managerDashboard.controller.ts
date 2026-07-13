@@ -9,23 +9,22 @@ export const managerDashboardController = {
     const managerId = req.user!.id;
     const manager = await prisma.user.findUnique({
       where: { id: managerId },
-      select: { departmentId: true, role: true },
     });
 
-    if (!manager?.departmentId) {
+    if (!manager) {
       throw new AppError("You are not assigned to any department", 400);
     }
 
-    const department = await prisma.department.findUnique({
-      where: { id: manager.departmentId },
-      select: { name: true },
+    const department = await prisma.department.findMany({
+      where: { managerId: manager.id },
+      select: { name: true,id :true},
     });
+
+    const departmentIds = department.map(dept => dept.id)
 
     const users = await prisma.user.findMany({
       where: {
-        departmentId: manager.departmentId,
-        id: { not: managerId },
-        isActive: true,
+        agentsdepartmentId:{in:departmentIds},
       },
       select: {
         id: true,
@@ -78,8 +77,8 @@ export const managerDashboardController = {
     );
 
     res.json({
-      departmentId: manager.departmentId,
-      departmentName: department?.name || "Unknown",
+      departmentId: departmentIds,
+      departmentName: department || "Unknown",
       users: usersWithTickets,
     });
   },
@@ -88,19 +87,25 @@ export const managerDashboardController = {
     const managerId = req.user!.id;
     const { userId } = req.params;
 
-    const manager = await prisma.user.findUnique({
-      where: { id: managerId },
-      select: { departmentId: true },
+    const manager = await prisma.department.findMany({
+      where: { managerId: managerId },
+      select:{
+        id : true
+      }
     });
 
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { departmentId: true, fullName: true },
+      select: { agentsdepartmentId: true, fullName: true },
     });
 
-    if (!manager?.departmentId || targetUser?.departmentId !== manager.departmentId) {
+    
+    const managerIds = manager.map(ids => ids.id)
+
+    if (!manager || !targetUser || !managerIds.includes(targetUser.agentsdepartmentId!) ) {
       throw new AppError("User is not in your department", 403);
     }
+
 
     const tickets = await prisma.ticket.findMany({
       where: {
@@ -108,7 +113,7 @@ export const managerDashboardController = {
           { assigneeId: userId },
           { requesterId: userId },
         ],
-        departmentId: manager.departmentId,
+        departmentId:{in:managerIds},
       },
       include: {
         assignee: { select: { id: true, fullName: true, email: true } },
@@ -138,9 +143,9 @@ export const managerDashboardController = {
       throw new AppError("ticketId and newAssigneeId are required", 400);
     }
 
-    const manager = await prisma.user.findUnique({
-      where: { id: managerId },
-      select: { departmentId: true },
+    const manager = await prisma.department.findMany({
+      where: { managerId : managerId },
+      select: { id: true },
     });
 
     const ticket = await prisma.ticket.findUnique({
@@ -148,8 +153,10 @@ export const managerDashboardController = {
       select: { departmentId: true, assigneeId: true, status: true, ticketNumber: true },
     });
 
+    const managerIds = manager.map(ids => ids.id)
+
     if (!ticket) throw new AppError("Ticket not found", 404);
-    if (ticket.departmentId !== manager?.departmentId) {
+    if (!managerIds.includes(ticket.departmentId)) {
       throw new AppError("Ticket is not in your department", 403);
     }
     if (ticket.assigneeId === newAssigneeId) {
@@ -160,13 +167,13 @@ export const managerDashboardController = {
 
     const newAssignee = await prisma.user.findUnique({
       where: { id: newAssigneeId },
-      select: { departmentId: true, isActive: true },
+      select: { agentsdepartmentId: true, isActive: true },
     });
 
     if (!newAssignee || !newAssignee.isActive) {
       throw new AppError("New assignee not found or inactive", 400);
     }
-    if (newAssignee.departmentId !== manager?.departmentId) {
+    if (!managerIds.includes(newAssignee.agentsdepartmentId!)) {
       throw new AppError("New assignee is not in your department", 400);
     }
 
@@ -206,36 +213,5 @@ export const managerDashboardController = {
     res.json(updated);
   },
 
-  async setDepartmentManager(req: AuthedRequest, res: Response) {
-    const { userId } = req.body;
 
-    if (!userId) throw new AppError("userId is required", 400);
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { departmentId: true, role: true },
-    });
-
-    if (!user) throw new AppError("User not found", 404);
-    if (!user.departmentId) throw new AppError("User must belong to a department first", 400);
-    if (user.role === UserRole.DEPT_MANAGER) {
-      throw new AppError("User is already a Department Manager", 400);
-    }
-
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { role: UserRole.DEPT_MANAGER },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user!.id,
-        action: `Promoted user ${updated.fullName} to Department Manager`,
-        entityType: "User",
-        entityId: userId,
-      },
-    });
-
-    res.json(updated);
-  },
 };

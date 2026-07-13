@@ -8,13 +8,6 @@ import { logStatusChange } from "./statushistory.service";
 import { Prisma, TicketPriority, SupportLevel, TicketStatus } from "../generated/prisma/client";
 import { hoursFromNow } from "../utils/time";
 
-const SLA_URGENCY_MULTIPLIER: Record<TicketPriority, number> = {
-  P1: 0.25,
-  P2: 0.5,
-  P3: 1,
-  P4: 1.5,
-};
-
 // Baseline hours used when there's no categoryId, or the category exists
 // but was never given a defaultSlaHours. category.defaultSlaHours, when
 // set, overrides this baseline entirely.
@@ -84,9 +77,7 @@ export const ticketService = {
       : null;
  // this need to reworked on not role based get the average or default sla hours for departments
     const priority = priorityService.computePriority({
-      requesterRole: requester.role,
       categoryDefaultPriority: category?.defaultPriority,
-      requiredSupportLevel: category?.minSupportLevel,
     });
 
     const baseSlaHours = category?.defaultSlaHours ?? BASE_SLA_HOURS_BY_PRIORITY[priority];
@@ -105,10 +96,8 @@ export const ticketService = {
       clientEmail,
       dateOfOccurance: new Date(dateOfOccurance),
       site,
-      state,
       priority,
       internalPriority: priority,
-      supportLevel: category?.minSupportLevel ?? SupportLevel.L1,
       slaDeadline,
     });
 

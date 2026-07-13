@@ -30,6 +30,7 @@ import {
   ArrowLeft,
   RefreshCw,
   Eye,
+  Trash,
   Ticket
 } from "lucide-react";
 
@@ -47,7 +48,9 @@ import {
   TicketStatus,
   TicketPriority,
   SupportLevel,
-  DepartmentSuggestions
+  DepartmentSuggestions,
+  PAGES,
+  metric
 } from "./types";
 
 import ClientManagement from "./components/ClientManagement";
@@ -55,10 +58,13 @@ import TicketDetail from "./components/TicketDetail";
 import { TicketForm } from "./components/TicketForm";
 import { Profile } from "./components/profile";
 import { UserDirectory } from "./components/userDirectory";
-import { InvitationComponent } from "./components/invitation";
+import { InvitationComponent } from "./components/Invitation";
 import { Dashboard } from "./components/Dashboard";
 import TicketsTable from "./components/TicketsTable"
-import ManagerDashboard from "./components/ManagerDashboard"
+import { ManagerDashboard } from "./components/ManagerDashboard";
+import AgentDashboard from "./components/AgentDashboardmock";
+import DepartmentDashboard from "./components/HODDashboardmock";
+import CXODashboard from "./components/CXODashboardmock";
 
 export const SanghviLogo = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -69,13 +75,6 @@ export const SanghviLogo = ({ className = "w-6 h-6" }: { className?: string }) =
     />
   </svg>
 );
-interface metric {
-        openTickets : number
-        assignedTickets : number,
-        slaBreachedTickets : number,
-        resolvedTickets : number,
-        totalSubmissions : number,
-}
 
 
 export default function App() {
@@ -103,7 +102,7 @@ export default function App() {
   const [inviteDeptCategories, setInviteDeptCategories] = useState<any[]>([]);
 
   // Navigation State
-  const [currentView, setCurrentView] = useState<string>("dashboard");
+  const [currentView, setCurrentView] = useState<string>(PAGES.DASHBOARD);
   const [selectedTicketId, setSelectedTicketId] = useState<string>("");
 
   // Data Lists State
@@ -157,21 +156,25 @@ export default function App() {
 
   // Developer Tool stats
   const [devLogs, setDevLogs] = useState("");
-    const [metric,setMetric] = useState<metric | null>(null)
+  const [metric,setMetric] = useState<metric | null>(null)
 
   // Mytickets
   const [mytickets,setMytickets] = useState<TicketType[]>([])
   const [assigned,setAssigned] = useState<TicketType[]>([])
   const [breached,setBreached] = useState<TicketType[]>([])
+  const [resovled,setResolved] = useState<TicketType[]>([])
+  const [onhold,setOnhold] = useState<TicketType[]>([])
 
   // Status filter shared by the My Tickets / Personal Workload / SLA Breached pages
   const [personalStatusFilter, setPersonalStatusFilter] = useState("");
 
   // Role based check short hands
-  const isStaff = user ? ["CEO", "CTO", "CFO", "COO", "GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER", "TEAM_LEAD", "AGENT"].includes(user.role) : false;
-  const isAdmin = user ? ["GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER"].includes(user.role) : false;
+  const isStaff = user ? ["HOD","CXO", "AGENT"].includes(user.role) : false;
+  const isAdmin = user ? ["GLOBAL_ADMIN"].includes(user.role) : false;
   const isGlobalAdmin = user ? user.role === "GLOBAL_ADMIN" : false;
-  const isManager = user ? ["MANAGER", "DEPT_MANAGER"].includes(user.role) : false;
+  const isManager = user ? ["HOD"].includes(user.role) : false;
+  const isCxo = user ? ["CXO"].includes(user.role) : false
+  const isAgent = user ? ["AGENT"].includes(user.role) : false
 
   // Initialize and check token
   useEffect(() => {
@@ -190,54 +193,38 @@ export default function App() {
     }
   }, []);
 
-  // Fetch company info when logged in
-  useEffect(() => {
-    if (token) {
-      fetch("/api/companies/me", {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => setCompany(data))
-        .catch(() => {});
-    }
-  }, [token]);
-
   // Load screen data based on view
   useEffect(() => {
     if (!token) return;
-    if (currentView === "dashboard") {
-      if (user?.role == UserRole.GLOBAL_ADMIN){
-        fetchTickets();
-      }
-      fetchDepartments();
-    } else if (currentView === "tickets") {
-      fetchTickets();
-      fetchDepartments();
-      fetchClients()
-    } else if (currentView === "users") {
+    if (currentView === PAGES.DASHBOARD) {
+      fetchMetrics()
+    } else if (currentView === PAGES.USER_DIRECTORY) {
       fetchUsers();
       fetchDepartments();
-    } else if (currentView === "invitations") {
+    } else if (currentView === PAGES.PENDING_INVITES) {
       fetchInvitations();
       fetchDepartments();
-    } else if (currentView === "departments") {
+    } else if (currentView === PAGES.DEPARTMENTS) {
       fetchDepartments();
-    } else if (currentView === "clients") {
-      // Handled inside ClientManagement
-    } else if (currentView === "audit-logs") {
+    } else if (currentView === PAGES.CLIENTS) {
+      fetchClients()
+    } else if (currentView === PAGES.AUDIT_LOGS){
       fetchAuditLogs();
-    } else if (currentView === "new-ticket") {
+    } else if (currentView === PAGES.NEW_TICKET) {
       fetchDepartments();
       fetchClients();
-    } else if (currentView == "mytickets"){
+    } else if (currentView == PAGES.MY_TICKETS){
       fetchMytickets()
-    } else if (currentView == "assignedtickets"){
+    } else if (currentView == PAGES.ASSINGED_TICKETS){
       fetchAssignedTickets()
-    } else if (currentView == "breachedtickets"){
+    } else if (currentView == PAGES.BREACHED_TICKETS){
       fetchbreachedTickets()
+    }else if(currentView == PAGES.RESOLVED_TICKETS){
+      fetchResolvedTickets()
+    }else if(currentView == PAGES.ON_HOLD){
+      fetchOnholdTickets()
     }
 
-    fetchMetrics()
   }, [currentView, filterDept, filterStatus, filterPriority, filterAssignee, filterSlaBreachedOnly, token]);
 
   // Load department categories for invitations
@@ -264,32 +251,6 @@ export default function App() {
       });
   }, [inviteDeptId, token]);
 
-  const fetchTickets = async () => {
-    try {
-      let deptId = filterDept;
-      if (isStaff && !isAdmin && user?.departmentId) {
-        deptId = user.departmentId;
-      }
-
-      const params = new URLSearchParams();
-      if (deptId) params.set("departmentId", deptId);
-      if (filterStatus) params.set("status", filterStatus);
-      if (filterPriority) params.set("priority", filterPriority);
-      if (filterAssignee) params.set("assigneeId", filterAssignee);
-      if (filterSlaBreachedOnly) params.set("slaBreached", "true");
-
-      const qs = params.toString();
-      let url = `http://localhost:3000/tickets${qs ? `?${qs}` : ""}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTickets(data.items);
-      }
-      
-    } catch (err) {}
-  };
 
   const fetchDepartments = async () => {
     try {
@@ -314,37 +275,66 @@ export default function App() {
         setMytickets(data)
       }
     } catch (err) {}
-    
 
   }
 
-  const fetchAssignedTickets= async () => {
-     try {
-      const res = await fetch(`http://localhost:3000/tickets/assigned/${user?.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  const fetchAssignedTickets = async () => {
+    try {
+      const res = await fetch(
+        `http://localhost:3000/tickets/assigned/${user?.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.ok) {
         const data = await res.json();
-        setAssigned(data)
+        setAssigned(data);
       }
     } catch (err) {}
-    
-
-  }
+  };
+  const fetchOnholdTickets = async () => {
+    try {
+      const res = await fetch(
+        `http://localhost:3000/tickets/onhold/${user?.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setOnhold(data);
+      }
+    } catch (err) {}
+  };
+  const fetchResolvedTickets = async () => {
+    try {
+      const res = await fetch(
+        `http://localhost:3000/tickets/resolved/${user?.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setResolved(data);
+      }
+    } catch (err) {}
+  };
 
   const fetchbreachedTickets = async () => {
-     try {
-      const res = await fetch(`http://localhost:3000/tickets/breached/${user?.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+    try {
+      const res = await fetch(
+        `http://localhost:3000/tickets/breached/${user?.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.ok) {
         const data = await res.json();
-        setBreached(data)
+        setBreached(data);
       }
     } catch (err) {}
-    
-
-  }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -396,15 +386,18 @@ export default function App() {
 
       const fetchMetrics = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/users/metric/${user.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setMetric(data.data)
-            }
-        } catch (err) { }
-    };
+          const res = await fetch(
+            `http://localhost:3000/users/metric/${user.id}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+          if (res.ok) {
+            const data = await res.json();
+            setMetric(data.data);
+          }
+        } catch (err) {}
+      };
 
 
   // Login handler
@@ -425,7 +418,7 @@ export default function App() {
       localStorage.setItem("service_now_user", JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
-      setCurrentView("dashboard");
+      setCurrentView(PAGES.DASHBOARD);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -456,7 +449,7 @@ export default function App() {
       localStorage.setItem("service_now_user", JSON.stringify(data.user));
       setToken(data.token);
       setUser(data.user);
-      setCurrentView("dashboard");
+      setCurrentView(PAGES.DASHBOARD);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -491,7 +484,7 @@ export default function App() {
       setToken(data.token);
       setUser(data.user);
       setInviteToken(null);
-      setCurrentView("dashboard");
+      setCurrentView(PAGES.DASHBOARD);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -505,7 +498,7 @@ export default function App() {
     setUser(null);
     setToken("");
     setCompany(null);
-    setCurrentView("dashboard");
+    setCurrentView(PAGES.DASHBOARD);
   };
 
   
@@ -600,7 +593,6 @@ export default function App() {
 
   // Delete Category
   const handleDeleteCategory = async (catId: string) => {
-    if (!confirm("Are you sure you want to delete this category?")) return;
     try {
       const res = await fetch(`http://localhost:3000/categories/${catId}`, {
         method: "DELETE",
@@ -617,9 +609,10 @@ export default function App() {
 
   // Create Keyword
   const handleCreateKeyword = async (e: React.FormEvent) => {
-    e.preventDefault();
     if (!newKwName) return;
     try {
+
+      let synonyms = newKwSynonyms.split(",")
       const res = await fetch("http://localhost:3000/keywords", {
         method: "POST",
         headers: {
@@ -629,7 +622,7 @@ export default function App() {
         body: JSON.stringify({
           departmentId: selectedDeptId,
           name: newKwName,
-          synonyms: newKwSynonyms
+          synonyms: synonyms 
         })
       });
       if (res.ok) {
@@ -643,7 +636,7 @@ export default function App() {
 
   // Delete Keyword
   const handleDeleteKeyword = async (kwId: string) => {
-    if (!confirm("Are you sure you want to delete this keyword?")) return;
+   
     try {
       const res = await fetch(`http://localhost:3000/keywords/${kwId}`, {
         method: "DELETE",
@@ -655,6 +648,23 @@ export default function App() {
       }
     } catch (err) {}
   };
+
+  const handleDeleteDepartment= async (kwId: string) => {
+     
+    try {
+      const res = await fetch(`http://localhost:3000/departments/${kwId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setDepartments(departments.filter(department => department.id != kwId))
+        handleSelectDeptConfig("");
+        setSuccess("department removed.");
+      }
+    } catch (err) {}
+  };
+
+
 
   // Promote Suggestion
   const handlePromoteSuggestion = async (sugId: string, term: string) => {
@@ -689,22 +699,6 @@ export default function App() {
       }
     } catch (err) {}
   };
-
-
-  // Filtered tickets lists for Dashboard indicators
-  const myAssignedTickets = allTicketsForMetrics.filter(t => 
-    t.assigneeId === user?.id && 
-    (!isStaff || !user?.departmentId || t.departmentId === user.departmentId)
-  );
-  const openIncidentCount = allTicketsForMetrics.filter(t => 
-    !["RESOLVED", "CLOSED"].includes(t.status) && 
-    (!isStaff || !user?.departmentId || t.departmentId === user.departmentId)
-  ).length;
-  const slaBreachedCount = allTicketsForMetrics.filter(t => 
-    t.slaBreached && 
-    !["RESOLVED", "CLOSED"].includes(t.status) && 
-    (!isStaff || !user?.departmentId || t.departmentId === user.departmentId)
-  ).length;
 
   // ====================== PUBLIC UNAUTHENTICATED SCENE ======================
 
@@ -755,17 +749,17 @@ export default function App() {
     }
 
     // 2. Main Login / Public Requester Signup
-    return (
+      return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
         <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
           <div className="text-center mb-6">
             <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
-              <img src={"../assets/logo.jpg"} className="w-12 h-12" />
+              <img src="../assets/logo.jpg" alt="" className="w-12 h-12" />
             </span>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Sml Operations</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">SML OPERATIONS</h1>
             <p className="text-xs text-slate-500 mt-1">
               {signupMode
-                ? "Self-register as a Requester to issue, view, and track corporate support tickets."
+                ? "Self-register as a Requester to issue, view, and track tickets."
                 : "Internal operations dashboard login page."}
             </p>
           </div>
@@ -777,8 +771,76 @@ export default function App() {
             </div>
           )}
 
-           
-            
+          {signupMode ? (
+            /* PUBLIC REQUESTER SIGNUP */
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email Address</label>
+                <input
+                  type="email"
+                  placeholder="employee@company.com"
+                  value={signupEmail}
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="Jane Doe"
+                  value={signupFullName}
+                  onChange={(e) => setSignupFullName(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Employee ID (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="EMP001"
+                  value={signupEmployeeId}
+                  onChange={(e) => setSignupEmployeeId(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  placeholder="Choose password"
+                  value={signupPassword}
+                  onChange={(e) => setSignupPassword(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
+              >
+                {loading ? "Registering Account..." : "Create Requester Account"}
+              </button>
+
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setSignupMode(false)}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
+                >
+                  Already registered? Sign In
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* STANDARD OPERATIONS LOGIN */
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email</label>
@@ -825,12 +887,12 @@ export default function App() {
                 </span>
               </div>
             </form>
-          
+          )}
 
           
         </div>
       </div>
-    )
+    );
   }
 
   // ====================== AUTHENTICATED SYSTEM SHELL ======================
@@ -848,10 +910,12 @@ export default function App() {
 
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-xs font-semibold text-slate-900">{user.fullName}</div>
+            <div className="text-xs font-semibold text-slate-900">
+              {user?.fullName}
+            </div>
             <div className="text-[10px] text-slate-500 font-mono tracking-wider flex items-center justify-end gap-1.5 uppercase font-bold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              {user.role}
+              {user?.role}
             </div>
           </div>
 
@@ -859,7 +923,7 @@ export default function App() {
 
           {/* Profile link */}
           <button
-            onClick={() => setCurrentView("profile")}
+            onClick={() => setCurrentView(PAGES.PROFILE)}
             className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer transition-colors"
           >
             My Profile
@@ -885,47 +949,67 @@ export default function App() {
 
           <div className="flex-1 py-2 space-y-0.5 overflow-y-auto">
             <button
-              onClick={() => setCurrentView("dashboard")}
+              onClick={() => setCurrentView(PAGES.DASHBOARD)}
               className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                currentView === "dashboard" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                currentView === PAGES.DASHBOARD
+                  ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                  : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
               }`}
             >
               <Activity size={15} />
               <span>Service Dashboard</span>
             </button>
 
-            {isAdmin ? (
-              <button
-                onClick={() => {
-                  setCurrentView("tickets");
-                }}
-                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "tickets" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
-                }`}
-              >
-                <Inbox size={15} />
-                <span>All Tickets / Queue</span>
-              </button>
-            ) : null }
-
             {isManager ? (
               <button
-                onClick={() => setCurrentView("manager-dashboard")}
+                onClick={() => setCurrentView(PAGES.HOD_DASHBOARD)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "manager-dashboard" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.HOD_DASHBOARD
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Users size={15} />
                 <span>Manager Dashboard</span>
               </button>
-            ) : null }
+            ) : null}
+
+            {isManager ? (
+              <button
+                onClick={() => setCurrentView(PAGES.HOD_ANALYTICS)}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.HOD_ANALYTICS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <Users size={15} />
+                <span>Department Analytics</span>
+              </button>
+            ) : null}
+
+            {isCxo ? (
+              <button
+                onClick={() => setCurrentView(PAGES.CXO_ANALYTICS)}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.CXO_ANALYTICS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <Users size={15} />
+                <span>Department Analytics</span>
+              </button>
+            ) : null}
 
             {/* Staff / Agent Directory */}
             {isGlobalAdmin && (
               <button
-                onClick={() => setCurrentView("users")}
+                onClick={() => setCurrentView(PAGES.USER_DIRECTORY)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "users" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.USER_DIRECTORY
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Users size={15} />
@@ -936,9 +1020,11 @@ export default function App() {
             {/* Admin invitations list */}
             {isAdmin && (
               <button
-                onClick={() => setCurrentView("invitations")}
+                onClick={() => setCurrentView(PAGES.PENDING_INVITES)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "invitations" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.PENDING_INVITES
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Mail size={15} />
@@ -950,11 +1036,13 @@ export default function App() {
             {isAdmin && (
               <button
                 onClick={() => {
-                  setCurrentView("departments");
+                  setCurrentView(PAGES.DEPARTMENTS);
                   setSelectedDeptId("");
                 }}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "departments" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.DEPARTMENTS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Layers size={15} />
@@ -962,12 +1050,32 @@ export default function App() {
               </button>
             )}
 
+            {
+              isAgent && (
+              <button
+                onClick={() => {
+                  setCurrentView(PAGES.AGENT_ANALYTICS);
+                  setSelectedDeptId("");
+                }}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.AGENT_ANALYTICS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <Layers size={15} />
+                <span>Personal Analytics</span>
+              </button>
+            )}
+
             {/* Clients Management (Global Admin only) */}
             {isGlobalAdmin && (
               <button
-                onClick={() => setCurrentView("clients")}
+                onClick={() => setCurrentView(PAGES.CLIENTS)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "clients" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.CLIENTS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Settings size={15} />
@@ -978,9 +1086,11 @@ export default function App() {
             {/* System Audit logs */}
             {isAdmin && (
               <button
-                onClick={() => setCurrentView("audit-logs")}
+                onClick={() => setCurrentView(PAGES.AUDIT_LOGS)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === "audit-logs" ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold" : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                  currentView === PAGES.AUDIT_LOGS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
                 }`}
               >
                 <Database size={15} />
@@ -988,40 +1098,58 @@ export default function App() {
               </button>
             )}
           </div>
-
-          
         </nav>
 
         {/* Central Operations Viewport container */}
         <main className="flex-1 p-8 overflow-y-auto">
-          {error && currentView !== "ticket-detail" && (
+          {error && currentView !== PAGES.TICKET_DETAILS && (
             <div className="mb-6 p-3.5 bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
               <ShieldAlert size={16} />
               {error}
             </div>
           )}
 
-          {success && currentView !== "ticket-detail" && (
+          {success && currentView !== PAGES.TICKET_DETAILS && (
             <div className="mb-6 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">
               <CheckCircle size={16} />
               {success}
             </div>
           )}
 
+
+          {/* AGENT ANAYLTICS*/}
+          {
+            currentView == PAGES.CXO_ANALYTICS && (
+              <CXODashboard/>
+
+            )
+          }
+          {
+            currentView == PAGES.HOD_ANALYTICS && (
+              <DepartmentDashboard/>
+            )
+
+          }
+
+          {
+            currentView == PAGES.AGENT_ANALYTICS && (
+              <AgentDashboard/>
+            )
+          }
+
           {/* VIEW: DASHBOARD */}
-          {currentView === "dashboard" && (
+          {currentView === PAGES.DASHBOARD && (
             <Dashboard
-            token={token}
-            setCurrentView={setCurrentView}
-            user={user}
-            setSelectedTicketId={setSelectedTicketId}
-            metric={metric!}
+              token={token}
+              setCurrentView={setCurrentView}
+              user={user!}
+              setSelectedTicketId={setSelectedTicketId}
+              metric={metric!}
             />
-           
           )}
 
           {/* VIEW: MANAGER DASHBOARD */}
-          {currentView === "manager-dashboard" && (
+          {currentView === PAGES.HOD_DASHBOARD && (
             <ManagerDashboard
               token={token}
               currentUser={user!}
@@ -1030,309 +1158,292 @@ export default function App() {
             />
           )}
 
-          {/* VIEW: TICKETS LIST / QUEUE */}
-          {currentView === "tickets" && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white border border-slate-200 shadow-xs rounded-2xl p-6">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900 tracking-tight">Tickets Registry</h1>
-                  <p className="text-sm text-slate-500">Service desk ticket records repository.</p>
-                </div>
+          {/* VIEW: CREATE TICKET (FORM) */}
+          {currentView === PAGES.NEW_TICKET && (
+            <TicketForm
+              setSelectedTicketId={setSelectedTicketId}
+              setCurrentView={setCurrentView}
+              setError={setError}
+              setSuccess={setSuccess}
+              token={token}
+              clients={clients}
+              departments={departments}
+            />
+          )}
+
+          {/* VIEW: TICKET DETAIL (COMPLEX TABS) */}
+          {currentView === PAGES.TICKET_DETAILS && (
+            <TicketDetail
+              ticketId={selectedTicketId}
+              token={token}
+              currentUser={user!}
+              metric={metric!}
+              setCurrentView={setCurrentView}
+              onBack={() => setCurrentView(PAGES.DASHBOARD)}
+            />
+          )}
+
+          {/* VIEW: PROFILE */}
+          {currentView === PAGES.PROFILE && (
+            <Profile
+              token={token}
+              setSuccess={setSuccess}
+              setUser={setUser}
+              user={user!}
+            />
+          )}
+
+          {/* VIEW: USERS DIRECTORY */}
+          {currentView === PAGES.USER_DIRECTORY && isGlobalAdmin && (
+            <UserDirectory
+              setError={setError}
+              setSuccess={setSuccess}
+              setUser={setUser}
+              user={user!}
+              users={users}
+              departments={departments}
+              fetchUsers={fetchUsers}
+              token={token}
+            />
+          )}
+
+          {/* VIEW: INVITATIONS */}
+          {currentView === PAGES.PENDING_INVITES && (
+            <InvitationComponent
+              setError={setError}
+              setInviteDeptId={setInviteDeptId}
+              setInviteCategoryIds={setInviteCategoryIds}
+              setInviteDeptCategories={setInviteDeptCategories}
+              inviteCategoryIds={inviteCategoryIds}
+              inviteDeptCategories={inviteDeptCategories}
+              setSuccess={setSuccess}
+              invitations={invitations}
+              departments={departments}
+              inviteDeptId={inviteDeptId}
+              token={token}
+              fetchInvitations={fetchInvitations}
+            />
+          )}
+
+          {currentView === PAGES.MY_TICKETS && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
                 <button
-                  onClick={() => setCurrentView("new-ticket")}
-                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 cursor-pointer flex items-center gap-2 rounded-lg transition-all shadow-xs"
+                  onClick={() => {
+                    setPersonalStatusFilter("");
+                    setCurrentView(PAGES.DASHBOARD);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus size={16} /> Submit Ticket
+                  <ArrowLeft size={14} /> Back to Dashboard
                 </button>
-              </div>
-
-              
-
-              {/* Filters bar */}
-              <div className="bg-white border border-slate-200/80 shadow-xs rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold">
-                  <Filter size={14} />
-                  Filters
-                </div>
                 <select
-                  value={filterDept}
-                  onChange={(e) => setFilterDept(e.target.value)}
-                  className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
-                >
-                  <option value="">All Departments</option>
-                  {departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
+                  value={personalStatusFilter}
+                  onChange={(e) => setPersonalStatusFilter(e.target.value)}
                   className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
                 >
                   <option value="">All Statuses</option>
                   <option value="OPEN">Open</option>
                   <option value="IN_PROGRESS">In Progress</option>
-                  <option value="PENDING">Pending</option>
+                  <option value="ON_HOLD">ON HOLD</option>
                   <option value="RESOLVED">Resolved</option>
                 </select>
-                {(filterDept || filterStatus) && (
-                  <button
-                    onClick={() => { setFilterDept(""); setFilterStatus(""); }}
-                    className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline"
-                  >
-                    Clear filters
-                  </button>
-                )}
               </div>
-
-              {/* Registry Table List */}
-              <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
-                {tickets.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400 text-sm italic">
-                    No ticket records matching current query parameters.
-                  </div>
-                ) : (
-                  <div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-slate-200/60 text-xs">
-                        <thead className="bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider">
-                          <tr>
-                            <th className="px-6 py-3.5 text-left">Ticket ID</th>
-                            <th className="px-6 py-3.5 text-left">Ticket Title</th>
-                            <th className="px-6 py-3.5 text-left">Client Account</th>
-                            <th className="px-6 py-3.5 text-left">Department</th>
-                            <th className="px-6 py-3.5 text-left">State</th>
-                            <th className="px-6 py-3.5 text-left">Priority</th>
-                            <th className="px-6 py-3.5 text-left">Assigned Agent</th>
-                            <th className="px-6 py-3.5 text-left">SLA Countdown</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-slate-700">
-                          {tickets.map(t => (
-                            <tr
-                              key={t.id}
-                              onClick={() => {
-                                setSelectedTicketId(t.id);
-                                setCurrentView("ticket-detail");
-                              }}
-                              className="hover:bg-slate-50/50 cursor-pointer transition-colors duration-150"
-                            >
-                              <td className="px-6 py-4 font-mono font-bold text-slate-900 hover:underline">{t.ticketNumber}</td>
-                              <td className="px-6 py-4 font-semibold text-slate-900">{t.title}</td>
-                              <td className="px-6 py-4 text-slate-500 font-medium">{t.clientName}</td>
-                              <td className="px-6 py-4 font-medium">{t.department?.name || "General"}</td>
-                              <td className="px-6 py-4">
-                                <span className={`px-2.5 py-1 rounded-full font-semibold text-[10px] border ${
-                                  t.status === "OPEN" ? "bg-blue-50 text-blue-700 border-blue-100" :
-                                  t.status === "IN_PROGRESS" ? "bg-indigo-50 text-indigo-700 border-indigo-100" :
-                                  t.status === "PENDING" ? "bg-amber-50 text-amber-700 border-amber-100" :
-                                  t.status === "RESOLVED" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-700 border-slate-200"
-                                }`}>
-                                  {t.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`px-2 py-0.5 rounded font-bold border font-mono text-[10px] ${
-                                  t.priority === "P1" ? "bg-red-50 text-red-800 border-red-200" :
-                                  t.priority === "P2" ? "bg-amber-50 text-amber-800 border-amber-200" :
-                                  t.priority === "P3" ? "bg-indigo-50 text-indigo-800 border-indigo-200" : "bg-slate-100 text-slate-700 border-slate-200"
-                                }`}>
-                                  {t.priority}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 font-medium text-slate-800">
-                                {t.assignee?.fullName || <span className="text-slate-400 italic">Unassigned</span>}
-                              </td>
-                              <td className="px-6 py-4 font-mono text-slate-500">
-                                {t.slaBreached ? (
-                                  <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded font-bold">BREACHED</span>
-                                ) : (
-                                  new Date(t.slaDeadline || "").toLocaleDateString()
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+              <div className="text-sm">
+                <TicketsTable
+                  tickets={
+                    personalStatusFilter
+                      ? mytickets.filter(
+                          (t) => t.status === personalStatusFilter,
+                        )
+                      : mytickets
+                  }
+                  currentView={currentView}
+                  setCurrentView={setCurrentView}
+                  setSelectedTicketId={setSelectedTicketId}
+                />
               </div>
             </div>
           )}
 
-          {/* VIEW: CREATE TICKET (FORM) */}
-          {currentView === "new-ticket" && (
-            <TicketForm
-            setSelectedTicketId={setSelectedTicketId}
-            setCurrentView={setCurrentView}
-            setError={setError}
-            setSuccess={setSuccess}
-            token={token}
-            clients={clients}
-            departments={departments}
-            />
-          )
-          }
-
-          {/* VIEW: TICKET DETAIL (COMPLEX TABS) */}
-          {currentView === "ticket-detail" && (
-            <TicketDetail
-              ticketId={selectedTicketId}
-              token={token}
-              currentUser={user}
-              metric={metric!}
-              onBack={() => setCurrentView("tickets")}
-            />
-          )}
-
-          {/* VIEW: PROFILE */}
-          {currentView === "profile" && (
-            <Profile
-            token={token}
-            setSuccess={setSuccess}
-            setUser={setUser}
-            user={user!}
-            />
-          )
-          }
-
-          {/* VIEW: USERS DIRECTORY */}
-          {currentView === "users" && isGlobalAdmin && (
-            <UserDirectory
-            setError={setError}
-            setSuccess={setSuccess}
-            setUser={setUser}
-            user={user!}
-            users={users}
-            departments={departments}
-            fetchUsers={fetchUsers}
-            token={token}
-            /> 
-          )}
-
-          {/* VIEW: INVITATIONS */}
-          {currentView === "invitations" && (
-            <InvitationComponent
-            setError={setError}
-            setInviteDeptId={setInviteDeptId}
-            setInviteCategoryIds={setInviteCategoryIds}
-            setInviteDeptCategories={setInviteDeptCategories}
-            inviteCategoryIds={inviteCategoryIds}
-            inviteDeptCategories={inviteDeptCategories}
-            setSuccess={setSuccess}
-            invitations={invitations}
-            departments={departments}
-            inviteDeptId={inviteDeptId}
-            token={token}
-            fetchInvitations={fetchInvitations}
-            /> 
-            
-          )}
-
-          {
-            currentView === "mytickets" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => { setPersonalStatusFilter(""); setCurrentView("dashboard"); }}
-                    className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <ArrowLeft size={14} /> Back to Dashboard
-                  </button>
-                  <select
-                    value={personalStatusFilter}
-                    onChange={(e) => setPersonalStatusFilter(e.target.value)}
-                    className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="OPEN">Open</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="RESOLVED">Resolved</option>
-                  </select>
-                </div>
+          {currentView === PAGES.ASSINGED_TICKETS && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => {
+                    setPersonalStatusFilter("");
+                    setCurrentView(PAGES.DASHBOARD);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back to Dashboard
+                </button>
+                <select
+                  value={personalStatusFilter}
+                  onChange={(e) => setPersonalStatusFilter(e.target.value)}
+                  className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="ON_HOLD">ON HOLD</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+              <div className="text-sm">
                 <TicketsTable
-                  tickets={personalStatusFilter ? mytickets.filter(t => t.status === personalStatusFilter) : mytickets}
+                  tickets={
+                    personalStatusFilter
+                      ? assigned.filter(
+                          (t) => t.status === personalStatusFilter,
+                        )
+                      : assigned
+                  }
+                  currentView={currentView}
                   setCurrentView={setCurrentView}
                   setSelectedTicketId={setSelectedTicketId}
                 />
               </div>
-            )
-          
-          }
+            </div>
+          )}
 
-          {
-            currentView === "assignedtickets" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => { setPersonalStatusFilter(""); setCurrentView("dashboard"); }}
-                    className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <ArrowLeft size={14} /> Back to Dashboard
-                  </button>
-                  <select
-                    value={personalStatusFilter}
-                    onChange={(e) => setPersonalStatusFilter(e.target.value)}
-                    className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="OPEN">Open</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="RESOLVED">Resolved</option>
-                  </select>
-                </div>
+
+          {currentView === PAGES.RESOLVED_TICKETS && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => {
+                    setPersonalStatusFilter("");
+                    setCurrentView(PAGES.DASHBOARD);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back to Dashboard
+                </button>
+                <select
+                  value={personalStatusFilter}
+                  onChange={(e) => setPersonalStatusFilter(e.target.value)}
+                  className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="ON_HOLD">ON HOLD</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+              <div className="text-sm">
                 <TicketsTable
-                  tickets={personalStatusFilter ? assigned.filter(t => t.status === personalStatusFilter) : assigned}
+                  tickets={
+                    personalStatusFilter
+                      ? assigned.filter(
+                          (t) => t.status === personalStatusFilter,
+                        )
+                      : resovled 
+                  }
+                  currentView={currentView}
                   setCurrentView={setCurrentView}
                   setSelectedTicketId={setSelectedTicketId}
                 />
               </div>
-            )
-          
-          }
+            </div>
+          )}
 
-          {
-            currentView === "breachedtickets" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => { setPersonalStatusFilter(""); setCurrentView("dashboard"); }}
-                    className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <ArrowLeft size={14} /> Back to Dashboard
-                  </button>
-                  <select
-                    value={personalStatusFilter}
-                    onChange={(e) => setPersonalStatusFilter(e.target.value)}
-                    className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="OPEN">Open</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="RESOLVED">Resolved</option>
-                  </select>
-                </div>
+          {currentView === PAGES.ON_HOLD    && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => {
+                    setPersonalStatusFilter("");
+                    setCurrentView(PAGES.DASHBOARD);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back to Dashboard
+                </button>
+                <select
+                  value={personalStatusFilter}
+                  onChange={(e) => setPersonalStatusFilter(e.target.value)}
+                  className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="ON_HOLD">ON HOLD</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+              <div className="text-sm">
                 <TicketsTable
-                  tickets={personalStatusFilter ? breached.filter(t => t.status === personalStatusFilter) : breached}
+                  tickets={
+                    personalStatusFilter
+                      ? assigned.filter(
+                          (t) => t.status === personalStatusFilter,
+                        )
+                      : onhold 
+                  }
+                  currentView={currentView}
                   setCurrentView={setCurrentView}
                   setSelectedTicketId={setSelectedTicketId}
                 />
               </div>
-            )
-          
-          }
+            </div>
+          )}
+
+
+
+          {currentView === PAGES.BREACHED_TICKETS && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => {
+                    setPersonalStatusFilter("");
+                    setCurrentView(PAGES.DASHBOARD);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back to Dashboard
+                </button>
+                <select
+                  value={personalStatusFilter}
+                  onChange={(e) => setPersonalStatusFilter(e.target.value)}
+                  className="text-xs p-2 border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="ON_HOLD">ON_HOLD</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+              <div className="text-sm">
+                <TicketsTable
+                  tickets={
+                    personalStatusFilter
+                      ? breached.filter(
+                          (t) => t.status === personalStatusFilter,
+                        )
+                      : breached
+                  }
+                  currentView={currentView}
+                  setCurrentView={setCurrentView}
+                  setSelectedTicketId={setSelectedTicketId}
+                />
+              </div>
+            </div>
+          )}
 
           {/* VIEW: DEPARTMENTS & SLA POLICY */}
-          {currentView === "departments" && (
+          {currentView === PAGES.DEPARTMENTS && (
             <div className="space-y-6">
               <div className="bg-white border border-zinc-200 p-6 flex justify-between items-center">
                 <div>
-                  <h1 className="text-xl font-bold text-zinc-900">Departments SLA & Knowledge Index</h1>
-                  <p className="text-sm text-zinc-500 mt-1">Configure service parameters, categories, and tags.</p>
+                  <h1 className="text-xl font-bold text-zinc-900">
+                    Departments SLA & Knowledge Index
+                  </h1>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    Configure service parameters, categories, and tags.
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowAddDeptDialog(true)}
@@ -1347,7 +1458,9 @@ export default function App() {
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                   <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
                     <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-bold text-zinc-900">Add Department</h2>
+                      <h2 className="text-lg font-bold text-zinc-900">
+                        Add Department
+                      </h2>
                       <button
                         onClick={() => setShowAddDeptDialog(false)}
                         className="text-zinc-400 hover:text-zinc-700 text-xl leading-none cursor-pointer"
@@ -1355,9 +1468,14 @@ export default function App() {
                         ×
                       </button>
                     </div>
-                    <form onSubmit={handleCreateDepartment} className="space-y-4">
+                    <form
+                      onSubmit={handleCreateDepartment}
+                      className="space-y-4"
+                    >
                       <div>
-                        <label className="block text-xs font-semibold text-zinc-700 mb-1">Department Name</label>
+                        <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                          Department Name
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g. IT Support"
@@ -1368,11 +1486,15 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-zinc-700 mb-1">Description</label>
+                        <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                          Description
+                        </label>
                         <textarea
                           placeholder="Optional description"
                           value={newDeptDescription}
-                          onChange={(e) => setNewDeptDescription(e.target.value)}
+                          onChange={(e) =>
+                            setNewDeptDescription(e.target.value)
+                          }
                           className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
                           rows={3}
                         />
@@ -1400,21 +1522,41 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Department selectors card grid */}
                 <div className="space-y-3">
-                  <h3 className="text-xs uppercase font-mono font-bold text-zinc-500 tracking-wider">Select Department</h3>
-                  {departments.map(d => (
+                  <h3 className="text-xs uppercase font-mono font-bold text-zinc-500 tracking-wider">
+                    Select Department
+                  </h3>
+                  {departments.map((d) => (
                     <div
                       key={d.id}
                       onClick={() => handleSelectDeptConfig(d.id)}
                       className={`p-4 border cursor-pointer select-none ${
-                        selectedDeptId === d.id ? "bg-white border-[#30b380] shadow-xs" : "bg-white border-zinc-200 hover:bg-zinc-50"
+                        selectedDeptId === d.id
+                          ? "bg-white border-[#30b380] shadow-xs"
+                          : "bg-white border-zinc-200 hover:bg-zinc-50"
                       }`}
                     >
-                      <span className="text-[10px] font-mono text-zinc-400 block uppercase font-bold">Scope ID: {d.id}</span>
-                      <h4 className="text-sm font-semibold text-zinc-950 mt-1">{d.name}</h4>
-                      <p className="text-xs text-zinc-500 mt-1">{d.description}</p>
-                      <div className="flex gap-4 mt-3 pt-2.5 border-t border-zinc-100 text-[10px] font-mono text-zinc-400">
-                        <span>Staff: {d.userCount || 0}</span>
-                        <span>Tickets logged: {d.ticketCount || 0}</span>
+                      <span className="text-[10px] font-mono text-zinc-400 block uppercase font-bold">
+                        Scope ID: {d.id}
+                      </span>
+                      <h4 className="text-sm font-semibold text-zinc-950 mt-1">
+                        {d.name}
+                      </h4>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        {d.description}
+                      </p>
+                      <div className="flex justify-between gap-4 mt-3 pt-2.5 border-t border-zinc-100 text-[10px] font-mono text-zinc-400">
+                        <div className="flex gap-4 w-fit">
+                          <span>Staff: {d._count.agents || 0}</span>
+                          <span>Tickets logged: {d._count.tickets || 0}</span>
+                        </div>
+                        <div className="flex   ">
+                          <Trash className="w-4 h-4 text-red-400" onClick={(e)=>{
+                            e.stopPropagation()
+                            handleDeleteDepartment(d.id)
+                          }
+                          }/>
+                          
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1427,11 +1569,16 @@ export default function App() {
                       {/* Sub-Section: Categories */}
                       <div>
                         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-900 border-b pb-2 mb-4 flex justify-between items-center">
-                          <span>Department Categories & SLA Configurations</span>
+                          <span>
+                            Department Categories & SLA Configurations
+                          </span>
                         </h3>
 
                         {/* inline category creator */}
-                        <form onSubmit={handleCreateCategory} className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-zinc-50 p-3 border border-zinc-200 mb-4">
+                        <form
+                          onSubmit={handleCreateCategory}
+                          className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-zinc-50 p-3 border border-zinc-200 mb-4"
+                        >
                           <input
                             type="text"
                             placeholder="Category Name"
@@ -1451,7 +1598,11 @@ export default function App() {
                           />
                           <select
                             value={newCatPriority}
-                            onChange={(e) => setNewCatPriority(e.target.value as TicketPriority)}
+                            onChange={(e) =>
+                              setNewCatPriority(
+                                e.target.value as TicketPriority,
+                              )
+                            }
                             className="text-xs p-2 border border-zinc-300 bg-white"
                           >
                             <option value="P1">P1 - Critical</option>
@@ -1469,27 +1620,45 @@ export default function App() {
 
                         {/* List categories */}
                         {deptCategoriesList.length === 0 ? (
-                          <p className="text-xs text-zinc-400 italic">No categories mapped to this department yet.</p>
+                          <p className="text-xs text-zinc-400 italic">
+                            No categories mapped to this department yet.
+                          </p>
                         ) : (
                           <div className="overflow-x-auto border border-zinc-200">
                             <table className="min-w-full divide-y divide-zinc-200 text-xs">
                               <thead className="bg-zinc-50 text-zinc-600">
                                 <tr>
-                                  <th className="px-4 py-2.5 text-left">Category Name</th>
-                                  <th className="px-4 py-2.5 text-left">SLA SLA Deadline</th>
-                                  <th className="px-4 py-2.5 text-left">Priority</th>
-                                  <th className="px-4 py-2.5 text-right">Action</th>
+                                  <th className="px-4 py-2.5 text-left">
+                                    Category Name
+                                  </th>
+                                  <th className="px-4 py-2.5 text-left">
+                                    SLA SLA Deadline
+                                  </th>
+                                  <th className="px-4 py-2.5 text-left">
+                                    Priority
+                                  </th>
+                                  <th className="px-4 py-2.5 text-right">
+                                    Action
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-zinc-200 text-zinc-700">
-                                {deptCategoriesList.map(c => (
+                                {deptCategoriesList.map((c) => (
                                   <tr key={c.id}>
-                                    <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                                    <td className="px-4 py-2.5 font-mono">{c.defaultSlaHours} hours</td>
-                                    <td className="px-4 py-2.5 font-mono font-bold text-teal-800">{c.defaultPriority}</td>
+                                    <td className="px-4 py-2.5 font-medium">
+                                      {c.name}
+                                    </td>
+                                    <td className="px-4 py-2.5 font-mono">
+                                      {c.defaultSlaHours} hours
+                                    </td>
+                                    <td className="px-4 py-2.5 font-mono font-bold text-teal-800">
+                                      {c.defaultPriority}
+                                    </td>
                                     <td className="px-4 py-2.5 text-right">
                                       <button
-                                        onClick={() => handleDeleteCategory(c.id)}
+                                        onClick={() =>
+                                          handleDeleteCategory(c.id)
+                                        }
                                         className="text-red-500 hover:text-red-700 font-bold"
                                       >
                                         Delete
@@ -1510,7 +1679,10 @@ export default function App() {
                         </h3>
 
                         {/* inline keyword definitions creator */}
-                        <form onSubmit={handleCreateKeyword} className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-zinc-50 p-3 border border-zinc-200 mb-4">
+                        <form
+                          onSubmit={handleCreateKeyword}
+                          className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-zinc-50 p-3 border border-zinc-200 mb-4"
+                        >
                           <input
                             type="text"
                             placeholder="Keyword (e.g. SSO)"
@@ -1536,15 +1708,19 @@ export default function App() {
 
                         {/* List defined tags */}
                         {deptKeywordsList.length === 0 ? (
-                          <p className="text-xs text-zinc-400 italic">No routing tags declared yet.</p>
+                          <p className="text-xs text-zinc-400 italic">
+                            No routing tags declared yet.
+                          </p>
                         ) : (
                           <div className="flex flex-wrap gap-2">
-                            {deptKeywordsList.map(k => (
+                            {deptKeywordsList.map((k) => (
                               <span
                                 key={k.id}
                                 className="inline-flex items-center gap-2 bg-zinc-100 text-zinc-800 text-xs px-2.5 py-1 border border-zinc-200"
                               >
-                                <strong className="text-[#032d26]">{k.name}</strong>
+                                <strong className="text-[#032d26]">
+                                  {k.name}
+                                </strong>
                                 {k.synonyms.length > 0 && (
                                   <span className="text-[10px] text-zinc-400 font-mono">
                                     ({k.synonyms.join(", ")})
@@ -1567,39 +1743,55 @@ export default function App() {
                         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-900 border-b pb-2 mb-4 flex items-center justify-between">
                           <span>Mined Unmatched Keyword Suggestions</span>
                           <span className="text-[10px] font-mono text-zinc-400 font-normal bg-zinc-50 px-2 py-0.5 border">
-                            Auto-mined over time from unmatched tickets narrative text.
+                            Auto-mined over time from unmatched tickets
+                            narrative text.
                           </span>
                         </h3>
 
                         {deptSuggestionsList.length === 0 ? (
                           <p className="text-xs text-zinc-400 italic text-center py-4 bg-zinc-50 border border-dashed">
-                            No keyword suggestions accumulated. Matchers are optimized.
+                            No keyword suggestions accumulated. Matchers are
+                            optimized.
                           </p>
                         ) : (
                           <div className="overflow-x-auto border border-zinc-200">
                             <table className="min-w-full divide-y divide-zinc-200 text-xs">
                               <thead className="bg-zinc-50 text-zinc-600 font-semibold uppercase">
                                 <tr>
-                                  <th className="px-4 py-3 text-left">Suggested Term</th>
-                                  <th className="px-4 py-3 text-left">Occurrences Count</th>
-                                  <th className="px-4 py-3 text-right">Actions</th>
+                                  <th className="px-4 py-3 text-left">
+                                    Suggested Term
+                                  </th>
+                                  <th className="px-4 py-3 text-left">
+                                    Occurrences Count
+                                  </th>
+                                  <th className="px-4 py-3 text-right">
+                                    Actions
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-zinc-200 text-zinc-700">
-                                {deptSuggestionsList.map(s => (
+                                {deptSuggestionsList.map((s) => (
                                   <tr key={s.id}>
-                                    <td className="px-4 py-3 font-mono font-bold text-[#032d26]">{s.term}</td>
-                                    <td className="px-4 py-3 font-mono">{s.occurrenceCount} matches</td>
+                                    <td className="px-4 py-3 font-mono font-bold text-[#032d26]">
+                                      {s.term}
+                                    </td>
+                                    <td className="px-4 py-3 font-mono">
+                                      {s.occurrenceCount} matches
+                                    </td>
                                     <td className="px-4 py-3 text-right space-x-2">
                                       <button
-                                        onClick={() => handlePromoteSuggestion(s.id, s.term)}
+                                        onClick={() =>
+                                          handlePromoteSuggestion(s.id, s.term)
+                                        }
                                         className="text-emerald-700 hover:underline font-bold"
                                       >
                                         Promote to Keyword
                                       </button>
                                       <span className="text-zinc-300">|</span>
                                       <button
-                                        onClick={() => handleRejectSuggestion(s.id)}
+                                        onClick={() =>
+                                          handleRejectSuggestion(s.id)
+                                        }
                                         className="text-red-500 hover:underline font-bold"
                                       >
                                         Dismiss
@@ -1615,7 +1807,8 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="text-center text-zinc-400 italic py-16">
-                      Select a department from the left listing to configure Service Level Agreements, categories, and routing tags.
+                      Select a department from the left listing to configure
+                      Service Level Agreements, categories, and routing tags.
                     </div>
                   )}
                 </div>
@@ -1624,46 +1817,73 @@ export default function App() {
           )}
 
           {/* VIEW: CLIENTS MANAGEMENT (GLOBAL ADMIN ONLY) */}
-          {currentView === "clients" && (
-            <ClientManagement token={token} />
-          )}
+          {currentView === PAGES.CLIENTS && <ClientManagement token={token} />}
 
           {/* VIEW: SYSTEM AUDIT LOGS */}
-          {currentView === "audit-logs" && (
+          {currentView === PAGES.AUDIT_LOGS && (
             <div className="space-y-6">
               <div className="bg-white border border-zinc-200 p-6 flex justify-between items-center">
                 <div>
-                  <h1 className="text-xl font-bold text-zinc-900 font-sans">System Audit Logs</h1>
-                  <p className="text-sm text-zinc-500 mt-1">Read-only logging of user profiles, ticket updates, overrides, and assignments.</p>
+                  <h1 className="text-xl font-bold text-zinc-900 font-sans">
+                    System Audit Logs
+                  </h1>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    Read-only logging of user profiles, ticket updates,
+                    overrides, and assignments.
+                  </p>
                 </div>
               </div>
 
               <div className="bg-white border border-zinc-200">
                 {auditLogs.length === 0 ? (
-                  <div className="py-8 text-center text-zinc-400 italic text-sm">No audit logs written.</div>
+                  <div className="py-8 text-center text-zinc-400 italic text-sm">
+                    No audit logs written.
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-zinc-200 text-xs">
                       <thead className="bg-zinc-50 text-zinc-600 font-bold uppercase">
                         <tr>
-                          <th className="px-6 py-3.5 text-left">Action Performed</th>
-                          <th className="px-6 py-3.5 text-left">Operator Involved</th>
-                          <th className="px-6 py-3.5 text-left">Entity Category</th>
-                          <th className="px-6 py-3.5 text-left">Target Record ID</th>
-                          <th className="px-6 py-3.5 text-left">Timestamp (UTC)</th>
+                          <th className="px-6 py-3.5 text-left">
+                            Action Performed
+                          </th>
+                          <th className="px-6 py-3.5 text-left">
+                            Operator Involved
+                          </th>
+                          <th className="px-6 py-3.5 text-left">
+                            Entity Category
+                          </th>
+                          <th className="px-6 py-3.5 text-left">
+                            Target Record ID
+                          </th>
+                          <th className="px-6 py-3.5 text-left">
+                            Timestamp (UTC)
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-200 text-zinc-700">
                         {auditLogs.map((log) => (
                           <tr key={log.id}>
-                            <td className="px-6 py-4 font-medium text-zinc-900">{log.action}</td>
-                            <td className="px-6 py-4">
-                              <span className="font-semibold block">{log.userFullName}</span>
-                              <span className="text-[10px] text-zinc-400 font-mono block">{log.userEmail}</span>
+                            <td className="px-6 py-4 font-medium text-zinc-900">
+                              {log.action}
                             </td>
-                            <td className="px-6 py-4 font-mono font-medium text-zinc-500">{log.entityType}</td>
-                            <td className="px-6 py-4 font-mono font-medium text-zinc-400">{log.entityId || "system"}</td>
-                            <td className="px-6 py-4 font-mono text-zinc-500">{new Date(log.createdAt).toLocaleString()}</td>
+                            <td className="px-6 py-4">
+                              <span className="font-semibold block">
+                                {log.userFullName}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 font-mono block">
+                                {log.userEmail}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-mono font-medium text-zinc-500">
+                              {log.entityType}
+                            </td>
+                            <td className="px-6 py-4 font-mono font-medium text-zinc-400">
+                              {log.entityId || "system"}
+                            </td>
+                            <td className="px-6 py-4 font-mono text-zinc-500">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

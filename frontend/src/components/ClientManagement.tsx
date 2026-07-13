@@ -20,7 +20,9 @@ export default function ClientManagement({ token }: ClientManagementProps) {
   const [deleteId,setDeleteId] = useState<string>("")
   const [success, setSuccess] = useState("");
   const [newClientName, setNewClientName] = useState("");
+  const [newProjectName,setNewProjectName] = useState("")
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editProjectName,seteditProjectName] = useState("")
   const [editClientName, setEditClientName] = useState("");
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -51,18 +53,19 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch("http://localhost:3000/api/clients", {
+      const res = await fetch("http://localhost:3000/clients", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: newClientName.trim() })
+        body: JSON.stringify({ name: newClientName.trim(),projectName: newProjectName.trim() })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create client");
       setSuccess("Client added successfully.");
       setNewClientName("");
+      setNewProjectName("")
       fetchClients();
     } catch (err: any) {
       setError(err.message);
@@ -81,7 +84,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: editClientName.trim() })
+        body: JSON.stringify({ name: editClientName.trim(),projectName:editProjectName.trim() })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update client");
@@ -164,6 +167,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                 <thead className="bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
                   <tr>
                     <th className="px-6 py-3.5 text-left">Client Name</th>
+                    <th className="px-6 py-3.5 text-left">Project Name</th>
                     <th className="px-6 py-3.5 text-left">Registered Date</th>
                     <th className="px-6 py-3.5 text-right">Actions</th>
                   </tr>
@@ -172,6 +176,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                   {Array.isArray(clients) &&  clients.map(c => (
                     <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 font-semibold text-slate-900">{c.name}</td>
+                      <td className="px-6 py-4 font-semibold text-slate-900">{c.projectName}</td>
                       <td className="px-6 py-4 text-slate-500 font-mono">{new Date(c.createdAt).toLocaleDateString()}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="inline-flex gap-2">
@@ -179,6 +184,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                             onClick={() => {
                               setEditingClient(c);
                               setEditClientName(c.name);
+                              seteditProjectName(c.projectName)
                             }}
                             className="p-1.5 text-slate-500 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 rounded"
                             title="Edit Client"
@@ -221,12 +227,23 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  value={editProjectName}
+                  onChange={(e) => seteditProjectName(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-400 font-medium"
+                  required
+                />
+              </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     setEditingClient(null);
                     setEditClientName("");
+                    seteditProjectName("")
                   }}
                   className="px-3.5 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer"
                 >
@@ -250,6 +267,17 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                   placeholder="e.g. Wayne Enterprises"
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-400 font-medium"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Wayne Enterprises"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-400 font-medium"
                   required
                 />

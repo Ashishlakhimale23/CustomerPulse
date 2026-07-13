@@ -6,29 +6,43 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
   MessageSquare,
   RotateCcw,
   X,
+  Building2,
 } from "lucide-react";
-import { DepartmentTeam, DepartmentTeamMember, Ticket as TicketType } from "../types";
+import { DepartmentTeam, DepartmentTeamMember, Ticket as TicketType, Department } from "../types";
 
 interface ManagerDashboardProps {
   token: string;
-  currentUser: { id: string; fullName: string; departmentId?: string };
+  currentUser: { id: string; fullName: string; departmentId?: string; departments?: { id: string; name: string }[] };
   setSelectedTicketId: (id: string) => void;
   setCurrentView: (view: string) => void;
+  departments: Department[];
+  apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 const API_BASE = "http://localhost:3000";
 
-export default function ManagerDashboard({
+export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   token,
   currentUser,
   setSelectedTicketId,
   setCurrentView,
-}: ManagerDashboardProps) {
+  departments,
+  apiFetch,
+}) => {
+  const requestFn = apiFetch || window.fetch;
+
+  // Manager managed departments (could be from currentUser.departments or all departments if manager has cross-dept access)
+  const managedDepartments = currentUser.departments && currentUser.departments.length > 0
+    ? currentUser.departments
+    : departments;
+
+  const [selectedDeptId, setSelectedDeptId] = useState<string>(
+    managedDepartments[0]?.id || currentUser.departmentId || ""
+  );
+
   const [teamData, setTeamData] = useState<DepartmentTeam | null>(null);
   const [selectedUser, setSelectedUser] = useState<DepartmentTeamMember | null>(null);
   const [userTickets, setUserTickets] = useState<TicketType[]>([]);
@@ -39,17 +53,21 @@ export default function ManagerDashboard({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fetchTeam = async () => {
+  const fetchTeam = async (deptId?: string) => {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`${API_BASE}/manager-dashboard/team`, {
+      const targetDept = deptId || selectedDeptId;
+      const url =  `http://localhost:3000/manager-dashboard/team`;
+
+      const res = await requestFn(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         setTeamData(data);
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to load team data");
       }
     } catch {
@@ -63,14 +81,14 @@ export default function ManagerDashboard({
     setTicketLoading(true);
     setShowReassign(null);
     try {
-      const res = await fetch(`${API_BASE}/manager-dashboard/user/${userId}/tickets`, {
+      const res = await requestFn(`${API_BASE}/manager-dashboard/user/${userId}/tickets`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         setUserTickets(data.tickets || []);
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to load user tickets");
       }
     } catch {
@@ -85,7 +103,7 @@ export default function ManagerDashboard({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`${API_BASE}/manager-dashboard/reassign`, {
+      const res = await requestFn(`${API_BASE}/manager-dashboard/reassign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +118,7 @@ export default function ManagerDashboard({
         if (selectedUser) fetchUserTickets(selectedUser.id);
         fetchTeam();
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setError(err.error || "Failed to reassign");
       }
     } catch {
@@ -109,8 +127,8 @@ export default function ManagerDashboard({
   };
 
   useEffect(() => {
-    fetchTeam();
-  }, [token]);
+    fetchTeam(selectedDeptId);
+  }, []);
 
   const totalTeamTickets = teamData?.users.reduce((sum, u) => sum + u.activeTickets, 0) || 0;
   const totalBreached = teamData?.users.reduce((sum, u) => sum + u.breachedTickets, 0) || 0;
@@ -119,7 +137,7 @@ export default function ManagerDashboard({
   return (
     <div className="space-y-6 font-sans">
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">
               Manager Dashboard
@@ -127,15 +145,39 @@ export default function ManagerDashboard({
             <p className="text-sm text-slate-500 mt-1">
               {teamData?.departmentName
                 ? `Department: ${teamData.departmentName}`
-                : "Loading department..."}
+                : "Select a department to view team metrics."}
             </p>
           </div>
-          <button
-            onClick={fetchTeam}
-            className="text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-1.5 transition-all"
-          >
-            <RotateCcw size={14} /> Refresh
-          </button>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* Department Dropdown Selector for Managers managing multiple departments */}
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+              <Building2 size={14} className="text-slate-500 shrink-0" />
+              <select
+                value={selectedDeptId}
+                onChange={(e) => {
+                  setSelectedDeptId(e.target.value);
+                  setSelectedUser(null);
+                  setUserTickets([]);
+                }}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+              >
+                <option value="">-- All Managed Departments --</option>
+                {managedDepartments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => fetchTeam(selectedDeptId)}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center gap-1.5 transition-all bg-white shrink-0"
+            >
+              <RotateCcw size={14} /> Refresh
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
@@ -179,51 +221,55 @@ export default function ManagerDashboard({
             <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
-                  <Users size={14} /> Team Members
+                  <Users size={14} /> Team Members ({teamData?.users.length || 0})
                 </h2>
               </div>
-              <div className="divide-y divide-slate-100">
-                {teamData?.users.map((member) => (
-                  <div
-                    key={member.id}
-                    onClick={() => {
-                      setSelectedUser(member);
-                      fetchUserTickets(member.id);
-                    }}
-                    className={`p-4 cursor-pointer transition-all hover:bg-slate-50 ${
-                      selectedUser?.id === member.id ? "bg-indigo-50 border-l-4 border-l-indigo-500" : ""
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
-                          {member.fullName[0]}
+              <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+                {teamData?.users.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 italic">No members found in this department.</div>
+                ) : (
+                  teamData?.users.map((member) => (
+                    <div
+                      key={member.id}
+                      onClick={() => {
+                        setSelectedUser(member);
+                        fetchUserTickets(member.id);
+                      }}
+                      className={`p-4 cursor-pointer transition-all hover:bg-slate-50 ${
+                        selectedUser?.id === member.id ? "bg-indigo-50 border-l-4 border-l-indigo-500" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
+                            {member.fullName[0]}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">{member.fullName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{member.role}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">{member.fullName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{member.role}</div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-slate-900">{member.activeTickets}</div>
+                          <div className="text-[10px] text-slate-400">active</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-slate-900">{member.activeTickets}</div>
-                        <div className="text-[10px] text-slate-400">active</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-2 text-[10px] text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Clock size={10} /> {member.openTickets} open
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <User size={10} /> {member.inProgressTickets} in-progress
-                      </span>
-                      {member.breachedTickets > 0 && (
-                        <span className="flex items-center gap-1 text-rose-600 font-semibold">
-                          <AlertTriangle size={10} /> {member.breachedTickets} breached
+                      <div className="flex gap-3 mt-2 text-[10px] text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <Clock size={10} /> {member.openTickets} open
                         </span>
-                      )}
+                        <span className="flex items-center gap-1">
+                          <User size={10} /> {member.inProgressTickets} in-progress
+                        </span>
+                        {member.breachedTickets > 0 && (
+                          <span className="flex items-center gap-1 text-rose-600 font-semibold">
+                            <AlertTriangle size={10} /> {member.breachedTickets} breached
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -259,7 +305,7 @@ export default function ManagerDashboard({
                   No tickets found for this user
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
                   {userTickets.map((t) => (
                     <div key={t.id} className="p-4 hover:bg-slate-50/50 transition-colors">
                       <div className="flex items-start justify-between gap-4">
@@ -380,4 +426,5 @@ export default function ManagerDashboard({
       )}
     </div>
   );
-}
+};
+

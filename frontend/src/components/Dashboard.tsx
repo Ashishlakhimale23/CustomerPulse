@@ -1,15 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Plus,Inbox,User,CheckCircle,Clock,Layers } from "lucide-react";
-import { Ticket, User as UserType } from "../types";
-
-
-interface metric {
-        openTickets : number
-        assignedTickets : number,
-        slaBreachedTickets : number,
-        resolvedTickets : number,
-        totalSubmissions : number,
-}
+import { PAGES, Ticket, User as UserType, metric } from "../types";
 
 
 export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}:{
@@ -21,8 +12,8 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
 }) => {
     const [tickets,setTickets] = useState<Ticket[]>([])
 
-    const isStaff = user ? ["CEO", "CTO", "CFO", "COO", "GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER", "TEAM_LEAD", "AGENT"].includes(user.role) : false;
-    const isAdmin = user ? ["GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER", "DEPT_MANAGER"].includes(user.role) : false;
+    const isStaff = user ? ["AGENT"].includes(user.role) : false;
+    const isAdmin = user ? ["GLOBAL_ADMIN","HOD","CXO"].includes(user.role) : false;
 
     const fetchTickets = async () => {
     try {
@@ -53,7 +44,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                   </p>
                 </div>
                 <button
-                  onClick={() => setCurrentView("new-ticket")}
+                  onClick={() => setCurrentView(PAGES.NEW_TICKET)}
                   className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 cursor-pointer flex items-center gap-2 rounded-lg transition-all shadow-xs"
                 >
                   <Plus size={16} />
@@ -68,7 +59,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                     {/* STAFF / ADMIN VIEW CARDS */}
                     <div 
                       onClick={() => {
-                        setCurrentView("mytickets");
+                        setCurrentView(PAGES.MY_TICKETS);
                       }}
                       className="bg-white border border-slate-200 hover:border-slate-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
@@ -85,7 +76,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                     <div 
                       onClick={() => {
                         
-                        setCurrentView("assignedtickets");
+                        setCurrentView(PAGES.ASSINGED_TICKETS);
                       }}
                       className="bg-white border border-slate-200 hover:border-slate-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
@@ -102,7 +93,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                     <div 
                       onClick={() => {
                         
-                        setCurrentView("breachedtickets");
+                        setCurrentView(PAGES.BREACHED_TICKETS);
                       }}
                       className="bg-white border border-slate-200 hover:border-red-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
@@ -127,7 +118,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                     {/* REQUESTER VIEW CARDS */}
                     <div 
                       onClick={() => {
-                        setCurrentView("mytickets");
+                        setCurrentView(PAGES.MY_TICKETS);
                       }}
                       className="bg-white border border-slate-200 hover:border-slate-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
@@ -145,7 +136,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
 
                     <div 
                       onClick={() => {
-                        setCurrentView("resolvedtickets");
+                        setCurrentView(PAGES.RESOLVED_TICKETS);
                       }}
                       className="bg-white border border-slate-200 hover:border-emerald-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
@@ -164,16 +155,16 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
 
                     <div 
                       onClick={() => {
-                        setCurrentView("totalsubmissions");
+                        setCurrentView(PAGES.ON_HOLD);
                       }}
                       className="bg-white border border-slate-200 hover:border-slate-400 shadow-xs rounded-2xl p-6 flex items-center justify-between cursor-pointer transition-all duration-200 group"
                     >
                       <div>
-                        <span className="text-xs text-slate-400 uppercase font-mono font-bold tracking-wider">Total Submitted</span>
+                        <span className="text-xs text-slate-400 uppercase font-mono font-bold tracking-wider">ON HOLD</span>
                         <h2 className="text-3xl font-extrabold text-slate-900 mt-1 group-hover:text-black transition-colors">
-                            {metric?.totalSubmissions}
+                            {metric?.onhold}
                         </h2>
-                        <p className="text-xs text-slate-500 mt-1 font-medium">Lifetime ticket count</p>
+                        <p className="text-xs text-slate-500 mt-1 font-medium">Tickects put on hold for some reason</p>
                       </div>
                       <span className="p-3 bg-slate-50 text-slate-600 rounded-xl border border-slate-150 group-hover:bg-slate-100 group-hover:text-slate-900 transition-all">
                         <Layers size={24} />

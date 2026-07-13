@@ -1,8 +1,9 @@
 import type React from "react";
-import type { Ticket } from "../types";
+import { PAGES, type Ticket } from "../types";
 
 type TicketsTableProps = {
     tickets: Ticket[];
+    currentView : string,
     setSelectedTicketId: React.Dispatch<React.SetStateAction<string>>;
     setCurrentView: React.Dispatch<React.SetStateAction<string>>;
 };
@@ -24,12 +25,13 @@ const priorityColors: Record<string, string> = {
 
 export default function TicketsTable({
     tickets,
+    currentView,
     setSelectedTicketId,
     setCurrentView,
 }: TicketsTableProps) {
     const openTicket = (ticketId: string) => {
         setSelectedTicketId(ticketId);
-        setCurrentView("ticket-detail");
+        setCurrentView(PAGES.TICKET_DETAILS);
     };
 
     if (!tickets?.length) {
@@ -41,98 +43,104 @@ export default function TicketsTable({
     }
 
     return (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead className="bg-slate-50">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Ticket
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Subject
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Client
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Status
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Priority
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
-                                Assignee
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">
-                                Action
-                            </th>
-                        </tr>
-                    </thead>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                  Ticket
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                  Department
+                </th>
+                
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                  Priority
+                </th>
+                {currentView != PAGES.ASSINGED_TICKETS && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                    Assignee
+                  </th>
+                )}
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                  Date of Issue
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">
+                  Action
+                </th>
+              </tr>
+            </thead>
 
-                    <tbody>
-                        {tickets.map((ticket) => (
-                            <tr
-                                key={ticket.id}
-                                className="border-t border-slate-100 hover:bg-slate-50"
-                            >
-                                <td className="px-4 py-3 font-mono font-semibold">
-                                    {ticket.ticketNumber}
-                                </td>
+            <tbody>
+              {tickets.map((ticket) => (
+                <tr
+                  key={ticket.id}
+                  className="border-t border-slate-100 hover:bg-slate-50"
+                >
+                  <td className="px-4 py-3 font-mono font-semibold">
+                    {ticket.ticketNumber}
+                  </td>
 
-                                <td className="px-4 py-3">
-                                    <div className="max-w-xs truncate font-medium">
-                                        {ticket.title}
-                                    </div>
-                                </td>
+                  <td className="px-4 py-3">
+                    <div className="max-w-xs truncate font-medium">
+                      {ticket.department?.name}
+                    </div>
+                  </td>
 
-                                <td className="px-4 py-3 text-slate-600">
-                                    {ticket.clientName}
-                                </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full border px-2 py-1 text-xs font-semibold ${
+                        statusColors[ticket.status] ?? statusColors.CLOSED
+                      }`}
+                    >
+                      {ticket.status.replaceAll("_", " ")}
+                    </span>
+                  </td>
 
-                                <td className="px-4 py-3">
-                                    <span
-                                        className={`rounded-full border px-2 py-1 text-xs font-semibold ${
-                                            statusColors[ticket.status] ??
-                                            statusColors.CLOSED
-                                        }`}
-                                    >
-                                        {ticket.status.replaceAll("_", " ")}
-                                    </span>
-                                </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded border px-2 py-1 text-xs font-bold ${
+                        priorityColors[ticket.priority] ?? priorityColors.P4
+                      }`}
+                    >
+                      {ticket.priority}
+                    </span>
+                  </td>
 
-                                <td className="px-4 py-3">
-                                    <span
-                                        className={`rounded border px-2 py-1 text-xs font-bold ${
-                                            priorityColors[ticket.priority] ??
-                                            priorityColors.P4
-                                        }`}
-                                    >
-                                        {ticket.priority}
-                                    </span>
-                                </td>
 
-                                <td className="px-4 py-3 text-slate-700">
-                                    {ticket.assignee?.fullName ?? (
-                                        <span className="italic text-slate-400">
-                                            Unassigned
-                                        </span>
-                                    )}
-                                </td>
+                  {currentView != PAGES.ASSINGED_TICKETS && (
+                    <td className="px-4 py-3 text-slate-700">
+                      {ticket.assignee?.fullName ?? (
+                        <span className="italic text-slate-400">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                  )}
 
-                                <td className="px-4 py-3 text-right">
-                                    <button
-                                        onClick={() => openTicket(ticket.id)}
-                                        className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-slate-700"
-                                    >
-                                        Open
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                  <td className="px-4 py-3 text-slate-600">
+                    {new Date(ticket.createdAt).toLocaleDateString()}
+                  </td>
+
+
+
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => openTicket(ticket.id)}
+                      className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-slate-700"
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
     );
 }
