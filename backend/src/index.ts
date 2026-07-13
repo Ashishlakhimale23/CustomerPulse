@@ -15,6 +15,8 @@ import { requestLogger } from "./middleware/requestLogger";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
 import { clientRouter } from "./routes/client";
 import { managerDashboardRouter } from "./routes/managerDashboard";
+import { requestorRouter } from "./routes/requestors";
+import { notificationRouter } from "./routes/notifications";
 
 const app = express();
 
@@ -37,6 +39,8 @@ app.use("/keywords", keywordRouter);
 app.use("/audit-logs", auditLogRouter);
 app.use("/clients",clientRouter)
 app.use("/manager-dashboard",managerDashboardRouter)
+app.use("/admin/requestors", requestorRouter)
+app.use("/notifications", notificationRouter)
 // ---- must be last ----
 app.use(notFoundHandler);
 app.use(errorHandler);

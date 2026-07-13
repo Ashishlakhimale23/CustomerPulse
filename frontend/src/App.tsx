@@ -65,6 +65,7 @@ import ManagerDashboard from "./components/ManagerDashboard"
 import AgentDashboard from "./components/AgentDashboardmock";
 import DepartmentDashboard from "./components/HODDashboardmock";
 import CXODashboard from "./components/CXODashboardmock";
+import { RequestorDirectory } from "./components/RequestorDirectory";
 
 export const SanghviLogo = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -408,6 +409,7 @@ export default function App() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
     try {
       const res = await fetch(`http://localhost:3000/auth/login`, {
@@ -434,6 +436,7 @@ export default function App() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
     try {
       const res = await fetch("http://localhost:3000/auth/signup", {
@@ -449,11 +452,12 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Signup failed");
 
-      localStorage.setItem("service_now_token", data.token);
-      localStorage.setItem("service_now_user", JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
-      setCurrentView(PAGES.DASHBOARD);
+      setSuccess(data.message || "Registration submitted. An admin will review your account before you can sign in.");
+      setSignupMode(false);
+      setSignupEmail("");
+      setSignupPassword("");
+      setSignupFullName("");
+      setSignupEmployeeId("");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -811,6 +815,12 @@ export default function App() {
             </div>
           )}
 
+          {success && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 rounded-lg">
+              {success}
+            </div>
+          )}
+
           {signupMode ? (
             /* PUBLIC REQUESTER SIGNUP */
             <form onSubmit={handleSignup} className="space-y-4">
@@ -1057,6 +1067,21 @@ export default function App() {
               </button>
             )}
 
+            {/* Requestor Directory (self-registered requesters awaiting/approved for access) */}
+            {isGlobalAdmin && (
+              <button
+                onClick={() => setCurrentView(PAGES.REQUESTOR_DIRECTORY)}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.REQUESTOR_DIRECTORY
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <User size={15} />
+                <span>Requestor Directory</span>
+              </button>
+            )}
+
             {/* Admin invitations list */}
             {isAdmin && (
               <button
@@ -1245,6 +1270,15 @@ export default function App() {
               departments={departments}
               fetchUsers={fetchUsers}
               token={token}
+            />
+          )}
+
+          {/* VIEW: REQUESTOR DIRECTORY */}
+          {currentView === PAGES.REQUESTOR_DIRECTORY && isGlobalAdmin && (
+            <RequestorDirectory
+              token={token}
+              setError={setError}
+              setSuccess={setSuccess}
             />
           )}
 

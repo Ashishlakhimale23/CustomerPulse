@@ -27,6 +27,15 @@ enum SupportLevel {
   L2
 }
 
+// NOTE(added): tracks the admin-approval workflow for accounts created via
+// public self-signup (requesters). Invitation-based accounts (agents, HODs,
+// CXOs, admins) skip this entirely and are created as APPROVED directly.
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum TicketPriority {
   P1
   P2
@@ -121,6 +130,9 @@ model User {
   isActive        Boolean      @default(true)
   onboardedById   String?
 
+  // NOTE(added): gates login + ticket creation for self-registered
+  // requesters until a GLOBAL_ADMIN reviews and approves the account.
+  approvalStatus  ApprovalStatus @default(APPROVED)
 
   // NOTE(added): inputs to the auto-assignment load balancer.
   isAvailableForAssignment Boolean @default(true)
@@ -164,6 +176,11 @@ model User {
   // NOTE(added): audit trail of who moved a ticket into each status,
   // separate from the per-status timestamp columns kept on Ticket itself.
   statusChangesLogged TicketStatusHistory[] @relation("TicketStatusChangedBy")
+
+  // NOTE(added): admin -> requester messages, surfaced in the requester's
+  // notifications panel.
+  messagesReceived AdminMessage[] @relation("MessageRecipient")
+  messagesSent     AdminMessage[] @relation("MessageSender")
 }
 
 model Keyword {
@@ -426,4 +443,20 @@ model Invitation {
 
   invitedBy       User              @relation("InvitedBy", fields: [invitedById], references: [id])
   department      Department[]     
+}
+
+// NOTE(added): lets a GLOBAL_ADMIN send a message to a specific user
+// (primarily requesters), surfaced in that user's notifications panel.
+model AdminMessage {
+  id          String   @id @default(uuid())
+  userId      String
+  fromAdminId String
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user      User @relation("MessageRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  fromAdmin User @relation("MessageSender", fields: [fromAdminId], references: [id])
+
+  @@index([userId, createdAt])
 }

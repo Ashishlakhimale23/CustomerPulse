@@ -7,9 +7,11 @@ import { authController } from "../controllers/auth.controller";
 
 export const authRouter = Router();
 
-// No POST /auth/signup - accounts are created via invitation acceptance
-// (see routes/invitations.ts -> POST /invitations/accept), which is this
-// system's signup flow and already returns a token on success. This
-// route is just for logging back in afterward.
+// POST /auth/signup is the public requester self-registration flow.
+// Accounts created this way start as PENDING and can't log in until a
+// GLOBAL_ADMIN approves them from the Requestor Directory.
+// (Invited accounts - agents, HODs, CXOs, admins - go through
+// routes/invitations.ts -> POST /invitations/accept instead, and are
+// approved by default.)
 authRouter.post("/login", publicTokenLimiter, validateBody(loginSchema), asyncHandler(authController.login));
-authRouter.post("/signup",authController.signup)
+authRouter.post("/signup", publicTokenLimiter, asyncHandler(authController.signup));

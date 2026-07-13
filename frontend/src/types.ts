@@ -56,6 +56,27 @@ export interface User {
   skills?: { id: string; proficiency: number; name: string }[];
 }
 
+export interface RequestorDirectoryEntry {
+  id: string;
+  fullName: string;
+  email: string;
+  employeeId?: string;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED";
+  isActive: boolean;
+  createdAt: string;
+  _count: { ticketsRequested: number };
+}
+
+export interface AdminMessage {
+  id: string;
+  userId: string;
+  fromAdminId: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  fromAdmin?: { fullName: string };
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -149,7 +170,7 @@ export interface Ticket {
   tags: string[];
   createdAt: string;
   updatedAt: string;
-  requester?: { fullName: string; email: string; employeeId?: string };
+  requester?: { fullName: string; email: string; employeeId?: string; role?: UserRole };
   assignee?: { fullName: string; email: string; supportLevel?: SupportLevel };
   department?: { name: string };
   category?: { name: string; defaultSlaHours?: number };
@@ -275,7 +296,8 @@ export const PAGES = {
   RESOLVED_TICKETS : "RESOLVED_TICKETS",
   AGENT_ANALYTICS : "AGENT_ANALYTICS",
   HOD_ANALYTICS : "HOD_ANALYTICS",
-  CXO_ANALYTICS : "CXO_ANALYTICS"
+  CXO_ANALYTICS : "CXO_ANALYTICS",
+  REQUESTOR_DIRECTORY : "REQUESTOR_DIRECTORY"
 }
 
 
@@ -286,5 +308,3 @@ export interface metric {
         resolvedTickets : number,
         onhold : number
 }
-
-

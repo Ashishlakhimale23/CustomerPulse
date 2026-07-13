@@ -82,7 +82,14 @@ export default function TicketsTable({
                   className="border-t border-slate-100 hover:bg-slate-50"
                 >
                   <td className="px-4 py-3 font-mono font-semibold">
-                    {ticket.ticketNumber}
+                    <div className="flex items-center gap-2">
+                      <span>{ticket.ticketNumber}</span>
+                      {ticket.requester?.role === "REQUESTER" && (
+                        <span className="text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                          External
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   <td className="px-4 py-3">

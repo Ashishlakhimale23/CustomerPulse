@@ -3,7 +3,6 @@ import { authService } from "../services/auth.service";
 import {prisma} from "../lib/database"
 import { AppError } from "../middleware/errorHandler";
 import bcrypt from "bcryptjs"
-import { signAuthToken } from "../utils/jwt";
 import { UserRole } from "../generated/prisma/enums";
 
 export const authController = {
@@ -27,22 +26,19 @@ export const authController = {
       data:{
         fullName:req.body.fullName,
         email : req.body.email,
+        employeeId: req.body.employeeId || undefined,
         passwordHash:passwordHash,
-        role : UserRole.REQUESTER
+        role : UserRole.REQUESTER,
+        // NOTE(added): self-registered requesters must be reviewed by a
+        // GLOBAL_ADMIN before they can log in or create tickets.
+        approvalStatus: "PENDING",
       }
     })
 
-    const token = signAuthToken({
-      id: user.id,
-      role: user.role,
+    res.status(201).json({
+      message: "Registration submitted. An admin will review your account before you can sign in.",
+      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, approvalStatus: user.approvalStatus },
     });
-
-    const result = {
-      token,
-      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
-    };
-
-    res.json(result)
   }
 
 }

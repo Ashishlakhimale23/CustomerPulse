@@ -22,6 +22,12 @@ export const authService = {
     if (!user.isActive) {
       throw new AppError("This account has been deactivated", 403);
     }
+    if (user.approvalStatus === "PENDING") {
+      throw new AppError("Your registration is still pending admin approval", 403);
+    }
+    if (user.approvalStatus === "REJECTED") {
+      throw new AppError("Your registration request was not approved", 403);
+    }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
