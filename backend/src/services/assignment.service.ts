@@ -142,6 +142,10 @@ export const assignmentService = {
       throw new AppError('agent or ticket not found',401)
     }
 
+    if (previous.slaBreached || previous.escalatedToId) {
+      throw new AppError("This ticket has been escalated and can only be reassigned by a department manager", 403);
+    }
+
     const ticket = await prisma.ticket.update({
       where: { id: ticketId },
       data: {
