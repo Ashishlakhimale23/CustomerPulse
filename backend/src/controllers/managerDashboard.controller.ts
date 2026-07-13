@@ -162,7 +162,7 @@ export const managerDashboardController = {
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      select: { departmentId: true, assigneeId: true, status: true, ticketNumber: true },
+      select: { departmentId: true, assigneeId: true, status: true, ticketNumber: true, slaBreached: true, escalatedToId: true },
     });
 
     const managerIds = manager.map(ids => ids.id)
@@ -187,6 +187,14 @@ export const managerDashboardController = {
     }
     if (!newAssignee.agentsdepartmentId || !managerIds.includes(newAssignee.agentsdepartmentId)) {
       throw new AppError("New assignee is not in your department", 400);
+    }
+
+    const newAssigneeActiveCount = await prisma.ticket.count({
+      where: { assigneeId: newAssigneeId, status: { not: "RESOLVED" } },
+    });
+
+    if (newAssigneeActiveCount > 3) {
+      throw new AppError("This agent already has more than 3 active tickets", 400);
     }
 
     const updated = await prisma.ticket.update({
