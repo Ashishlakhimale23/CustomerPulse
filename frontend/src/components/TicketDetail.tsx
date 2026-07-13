@@ -971,7 +971,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                   Assignment modifications are disabled as this ticket is now <strong>{ticket.status}</strong>.
                 </div>
               ) : (
-               metric.assignedTickets >= 3  ? (
+               metric.assignedTickets >= 3 && !ticket.slaBreached && !ticket.escalatedToId  ? (
                <div className="pt-3 border-t border-slate-100  space-y-2 w-full">
                 <div className="flex w-full">
                     <button
