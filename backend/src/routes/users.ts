@@ -14,4 +14,4 @@ userRouter.get("/:id", requireAuth, userController.getById);
 
 userRouter.get('/metric/:id',requireAuth,userController.metric)
 
-userRouter.patch("/reset/:id",requireAuth,userController.resetPassword)
+userRouter.patch("/:id", requireAuth, requireRole(UserRole.GLOBAL_ADMIN), userController.update);
