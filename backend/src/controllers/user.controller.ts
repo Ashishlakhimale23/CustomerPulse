@@ -28,7 +28,7 @@ export const userController = {
       prisma.ticket.count({
         where: {
           requesterId: userId,
-          status: "OPEN",
+          status: {in: [TicketStatus.OPEN,TicketStatus.IN_PROGRESS,TicketStatus.REOPENED]},
         },
       }),
 
@@ -41,7 +41,7 @@ export const userController = {
 
       prisma.ticket.count({
         where: {
-          requesterId: userId,
+          assigneeId: userId,
           slaBreached: true,
         },
       }),

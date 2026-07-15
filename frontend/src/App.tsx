@@ -64,8 +64,9 @@ import TicketsTable from "./components/TicketsTable"
 import ManagerDashboard from "./components/ManagerDashboard"
 import AgentDashboard from "./components/AgentDashboardmock";
 import DepartmentDashboard from "./components/HODDashboardmock";
-import CXODashboard from "./components/CXODashboardmock";
+import CXODashboardMock from "./components/CXODashboardmock";
 import { RequestorDirectory } from "./components/RequestorDirectory";
+import { CXODashboard } from "./components/CxoDashboard";
 
 export const SanghviLogo = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1052,6 +1053,20 @@ export default function App() {
               </button>
             ) : null}
 
+            {isCxo ? (
+              <button
+                onClick={() => setCurrentView(PAGES.CXO_DASHBOARD)}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.CXO_DASHBOARD
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <Layers size={15} />
+                <span>Executive Dashboard</span>
+              </button>
+            ) : null}
+
             {/* Staff / Agent Directory */}
             {isGlobalAdmin && (
               <button
@@ -1185,13 +1200,20 @@ export default function App() {
           {/* AGENT ANAYLTICS*/}
           {
             currentView == PAGES.CXO_ANALYTICS && (
-              <CXODashboard/>
+              <CXODashboardMock/>
 
             )
           }
           {
             currentView == PAGES.HOD_ANALYTICS && (
               <DepartmentDashboard/>
+            )
+
+          }
+
+          {
+            currentView == PAGES.CXO_DASHBOARD&& (
+              <CXODashboard setCurrentView={setCurrentView} setSelectedTicketId={setSelectedTicketId} token={token}/>
             )
 
           }

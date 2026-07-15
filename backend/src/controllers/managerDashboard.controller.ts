@@ -7,12 +7,14 @@ import { UserRole } from "../generated/prisma/client";
 export const managerDashboardController = {
   async getTeam(req: AuthedRequest, res: Response) {
     const managerId = req.user!.id;
+    console.log(managerId)
     const { departmentId } = req.query as { departmentId?: string };
 
     const managedDepartments = await prisma.department.findMany({
       where: { managerId },
       select: { id: true, name: true },
     });
+
 
     if (managedDepartments.length === 0) {
       throw new AppError("You are not assigned to any department", 400);

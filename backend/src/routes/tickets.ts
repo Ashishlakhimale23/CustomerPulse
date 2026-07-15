@@ -31,7 +31,7 @@ ticketRouter.get("/mytickets/:id",requireAuth,ticketController.myTickets)
 ticketRouter.post(
   "/:id/escalate",
   requireAuth,
-  requireRole(UserRole.AGENT, UserRole.HOD, UserRole.GLOBAL_ADMIN),
+  requireRole(UserRole.HOD,UserRole.CXO,UserRole.HOD,UserRole.REQUESTER),
   ticketController.escalate
 );
 

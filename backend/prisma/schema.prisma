@@ -94,10 +94,10 @@ model Department {
   description String?
   createdAt   DateTime @default(now())
 
-  managerId String?
+  managerId String[]
   manager User? @relation("departmentManager",fields: [managerId] , references: [id])
 
-  cxoId String?
+  cxoId String[]
   cxo User? @relation("departmentCxo",fields: [cxoId],references: [id])
 
   agents      User[] @relation("departmentAgents")

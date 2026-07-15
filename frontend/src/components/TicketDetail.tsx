@@ -270,7 +270,8 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
         },
         body: JSON.stringify({
           reason: escalateReason.trim(),
-          toLevel: escalateLevel || undefined
+          // shouldnt be level should be a agent
+          toLevel: SupportLevel.L1
         })
       });
       const data = await res.json();
@@ -507,7 +508,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
         {/* Action button bar */}
         <div className="flex items-center gap-2">
           {/* Reopen Ticket option for Requesters */}
-          {(!isStaff || ticket.requester?.id === currentUser.id )&& ["RESOLVED", "CLOSED"].includes(ticket.status) && (
+          { ["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <button
               onClick={()=>handleStatusChange(TicketStatus.REOPENED)}
               className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer flex items-center gap-1.5"
@@ -516,7 +517,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             </button>
           )}
 
-          {isStaff && ticket.requester?.id !== currentUser.id && !["RESOLVED", "CLOSED"].includes(ticket.status) && (
+          {(isdepartmentHeads || isStaff) && ticket.requester?.id !== currentUser.id && !["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <button
               onClick={()=>handleStatusChange(TicketStatus.RESOLVED)}
               className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
@@ -526,7 +527,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
           )}
 
           {/* Quick status transitions for Staff */}
-          {isStaff && ticket.requester?.id !== currentUser.id && !["RESOLVED", "CLOSED"].includes(ticket.status) && (
+          {(isStaff || isdepartmentHeads) && ticket.requester?.id !== currentUser.id && !["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <div className="relative inline-block text-left">
               <select
                 value={ticket.status}
@@ -1013,33 +1014,25 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
           
           
           {/* Escalation Control (Staff/Admin only - disallowed after resolution) */}
-          {isStaff && ticket.slaBreached &&  !["RESOLVED"].includes(ticket.status) && (
+          {(ticket.slaBreached && ticket.requesterId == currentUser.id) &&  !["RESOLVED"].includes(ticket.status) && (
             <div className="bg-white border border-zinc-200 p-6 space-y-4">
               <h2 className="text-sm font-semibold text-zinc-900 border-b border-zinc-100 pb-2">Support Escalations</h2>
 
-              <button
-                onClick={() => setShowEscalateForm(!showEscalateForm)}
-                className="w-full bg-[#032d26] hover:bg-[#021f1a] text-white text-xs font-semibold py-2 cursor-pointer flex justify-center items-center gap-1"
-              >
-                <TrendingUp size={14} /> Promote support Tier
-              </button>
+              {
+                // Conditional rendering the promote button
+                !showEscalateForm && (
+                  <button
+                    onClick={() => setShowEscalateForm(!showEscalateForm)}
+                    className="w-full bg-[#032d26] hover:bg-[#021f1a] text-white text-xs font-semibold py-2 cursor-pointer flex justify-center items-center gap-1"
+                  >
+                    <TrendingUp size={14} /> Promote The Ticket
+                  </button>
+                )
+              }
+
 
               {showEscalateForm && (
                 <form onSubmit={handleEscalate} className="p-3 bg-zinc-50 border border-zinc-200 space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-mono font-bold uppercase text-zinc-600 mb-1">Target Tier (Optional)</label>
-                    <select
-                      value={escalateLevel}
-                      onChange={(e) => setEscalateLevel(e.target.value)}
-                      className="w-full text-xs p-2 border border-zinc-300 bg-white"
-                    >
-                      <option value="">-- Next Tier --</option>
-                      <option value="L1">L1 Support</option>
-                      <option value="L2">L2 Senior Support</option>
-                      <option value="L3">L3 Specialist Tier</option>
-                      <option value="L4">L4 Executive Tier</option>
-                    </select>
-                  </div>
                   <div>
                     <label className="block text-[10px] font-mono font-bold uppercase text-zinc-600 mb-1">Justification Reason</label>
                     <textarea
@@ -1061,6 +1054,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
               )}
 
               {/* History Timeline */}
+              {/*
               {escalations.length > 0 && (
                 <div className="pt-3 border-t border-zinc-100 space-y-3">
                   <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block">Escalation History</span>
@@ -1082,12 +1076,12 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                     ))}
                   </div>
                 </div>
-              )}
+              )} */ }
             </div>
           )}
 
           {/* Show escalation history even if resolved, without promote button */}
-          {isStaff && ["RESOLVED"].includes(ticket.status) && escalations.length > 0 && (
+          {isdepartmentHeads && ["RESOLVED"].includes(ticket.status) && escalations.length > 0 && (
             <div className="bg-white border border-zinc-200 p-6 space-y-4">
               <h2 className="text-sm font-semibold text-zinc-900 border-b border-zinc-100 pb-2">Support Escalations (Closed)</h2>
               <div className="space-y-3.5 pl-2 border-l border-zinc-200">

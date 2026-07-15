@@ -33,9 +33,6 @@ export const escalationService = {
     const fromLevel = ticket.supportLevel;
     const toLevel = params.toLevel ?? nextLevel(fromLevel);
 
-    if (fromLevel && LEVEL_ORDER.indexOf(toLevel) <= LEVEL_ORDER.indexOf(fromLevel)) {
-      throw new Error("Escalation target must be a higher support level than the current one");
-    }
 
     const ticketKeywordIds = new Set(ticket.keywords.map((k) => k.keywordId));
 
@@ -78,6 +75,7 @@ export const escalationService = {
           isAutomatic,
         },
       }),
+      
       prisma.ticket.update({
         where: { id: ticketId },
         data: {

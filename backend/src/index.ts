@@ -17,6 +17,7 @@ import { clientRouter } from "./routes/client";
 import { managerDashboardRouter } from "./routes/managerDashboard";
 import { requestorRouter } from "./routes/requestors";
 import { notificationRouter } from "./routes/notifications";
+import { cxoRouter } from "./routes/cxoDashboard";
 
 const app = express();
 
@@ -41,11 +42,13 @@ app.use("/clients",clientRouter)
 app.use("/manager-dashboard",managerDashboardRouter)
 app.use("/admin/requestors", requestorRouter)
 app.use("/notifications", notificationRouter)
+app.use("/cxo-dashboard",cxoRouter)
 // ---- must be last ----
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
+  
   console.log(`Helpdesk API listening on :${port}`);
 });

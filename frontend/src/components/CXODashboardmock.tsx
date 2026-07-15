@@ -495,7 +495,7 @@ function DateRangeFilter({
 // ---------------------------------------------------------------------------
 // Main dashboard
 // ---------------------------------------------------------------------------
-export default function CXODashboard() {
+export default function CXODashboardMock() {
   const [selected, setSelected] = useState<DeptKey | "all">("all");
   const [rangeKey, setRangeKey] = useState<PresetKey>("thisWeek");
   const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null);

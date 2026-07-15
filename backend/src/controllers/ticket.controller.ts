@@ -237,7 +237,7 @@ export const ticketController = {
 
     const assignedTickets = await prisma.ticket.findMany({
       where : { 
-        requesterId : id,
+        assigneeId : id,
         slaBreached : true
       },
        select: {
@@ -261,7 +261,7 @@ export const ticketController = {
 
     })
 
-    console.log(assignedTickets)
+   
     res.json(assignedTickets)
 
   },
