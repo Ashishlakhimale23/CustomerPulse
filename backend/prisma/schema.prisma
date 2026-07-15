@@ -94,11 +94,8 @@ model Department {
   description String?
   createdAt   DateTime @default(now())
 
-  managerId String[]
-  manager User? @relation("departmentManager",fields: [managerId] , references: [id])
-
-  cxoId String[]
-  cxo User? @relation("departmentCxo",fields: [cxoId],references: [id])
+  manager User[] @relation("departmentManager")
+  cxo User[] @relation("departmentCxo")
 
   agents      User[] @relation("departmentAgents")
 
@@ -143,12 +140,11 @@ model User {
 
   // managed departments by the user
   managedDepartments     Department[]  @relation("departmentManager")
-  // agent
-  assignedDepartment Department? @relation("departmentAgents",fields: [agentsdepartmentId],references: [id]) 
   //cxo   
   coxDepartements  Department[] @relation("departmentCxo")
 
-
+  // agent
+  assignedDepartment Department? @relation("departmentAgents",fields: [agentsdepartmentId],references: [id]) 
   
   onboardedUsers  User[]       @relation("OnboardedBy")
   onboardedBy     User?        @relation("OnboardedBy", fields: [onboardedById], references: [id])
