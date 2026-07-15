@@ -51,7 +51,7 @@ export const invitationController = {
     });
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
+      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role,departments : [...user.managedDepartments.map(dept => dept.id),...user.coxDepartements.map(dept => dept.id),user.assignedDepartment?.id] },
     });
   },
 

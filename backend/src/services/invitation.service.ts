@@ -109,6 +109,7 @@ export const invitationService = {
       },
     });
     if (!invitation) throw new InvitationError("Invalid invitation token");
+    console.log(invitation)
     if (invitation.status !== InvitationStatus.PENDING) {
       throw new InvitationError(`Invitation is ${invitation.status.toLowerCase()}`);
     }

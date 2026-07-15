@@ -64,7 +64,7 @@ export const cxoDashboardController = {
 
     const usersWithTickets = await Promise.all(
       users.map(async (u) => {
-        const [activeTickets, totalRequested, openCount, inProgressCount, resolvedCount, breachedCount] =
+        const [activeTickets, totalRequested, openCount, inProgressCount, resolvedCount, breachedCount, escalatedCount] =
           await Promise.all([
             prisma.ticket.count({
               where: { assigneeId: u.id, status: { not: "RESOLVED" } },
@@ -84,6 +84,9 @@ export const cxoDashboardController = {
             prisma.ticket.count({
               where: { assigneeId: u.id, slaBreached: true, status: { not: "RESOLVED" } },
             }),
+            prisma.ticket.count({
+              where: { escalatedToId: u.id, status: { not: "RESOLVED" } },
+            }),
           ]);
 
         return {
@@ -100,6 +103,7 @@ export const cxoDashboardController = {
           inProgressTickets: inProgressCount,
           resolvedTickets: resolvedCount,
           breachedTickets: breachedCount,
+          escalatedTickets: escalatedCount,
         };
       })
     );
@@ -143,6 +147,9 @@ export const cxoDashboardController = {
       where.status = "RESOLVED";
     } else if (filter === "breached") {
       where.slaBreached = true;
+      where.status = { not: "RESOLVED" };
+    } else if (filter === "escalated") {
+      where.escalatedToId = { not: null };
       where.status = { not: "RESOLVED" };
     }
 
@@ -237,6 +244,7 @@ export const cxoDashboardController = {
       select: {
         departmentId: true,
         assigneeId: true,
+        requesterId: true,
         status: true,
         ticketNumber: true,
         slaBreached: true,
@@ -250,6 +258,9 @@ export const cxoDashboardController = {
     }
     if (ticket.assigneeId === newAssigneeId) {
       throw new AppError("Ticket is already assigned to this user", 400);
+    }
+    if (ticket.requesterId === newAssigneeId) {
+      throw new AppError("Cannot reassign a ticket to the agent who raised it", 400);
     }
 
     const prevStatus = ticket.status;
