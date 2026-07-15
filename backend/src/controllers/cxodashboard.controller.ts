@@ -113,6 +113,61 @@ export const cxoDashboardController = {
     });
   },
 
+  // GET /cxo-dashboard/tickets?departmentId=&filter=
+  async getDepartmentTickets(req: AuthedRequest, res: Response) {
+    const cxoId = req.user!.id;
+    const { departmentId, filter } = req.query as { departmentId?: string; filter?: string };
+
+    const cxoDepartments = await prisma.department.findMany({
+      where: { cxoId },
+      select: { id: true, name: true },
+    });
+
+    if (cxoDepartments.length === 0) {
+      throw new AppError("No departments are assigned to you", 400);
+    }
+
+    const cxoDeptIds = cxoDepartments.map((d) => d.id);
+
+    if (departmentId && !cxoDeptIds.includes(departmentId)) {
+      throw new AppError("Department is not under your management", 403);
+    }
+
+    const targetDeptIds = departmentId ? [departmentId] : cxoDeptIds;
+
+    const where: any = { departmentId: { in: targetDeptIds } };
+
+    if (filter === "active") {
+      where.status = { not: "RESOLVED" };
+    } else if (filter === "resolved") {
+      where.status = "RESOLVED";
+    } else if (filter === "breached") {
+      where.slaBreached = true;
+      where.status = { not: "RESOLVED" };
+    }
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      include: {
+        assignee: { select: { id: true, fullName: true, email: true } },
+        requester: { select: { id: true, fullName: true, email: true } },
+        category: { select: { name: true } },
+        department: { select: { name: true } },
+        comments: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          include: { user: { select: { fullName: true } } },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      filter: filter || "all",
+      tickets,
+    });
+  },
+
   // GET /cxo-dashboard/user/:userId/tickets
   async getUserTickets(req: AuthedRequest, res: Response) {
     const cxoId = req.user!.id;

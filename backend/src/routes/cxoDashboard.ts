@@ -23,7 +23,10 @@ cxoRouter.get("/department-comparison",requireAuth, asyncHandler(cxoDashboardCon
 
 cxoRouter.get("/departments",requireAuth, asyncHandler(cxoDashboardController.getDepartments)); 
 cxoRouter.get("/team",requireAuth, asyncHandler(cxoDashboardController.getTeam));
+cxoRouter.get("/tickets",requireAuth, asyncHandler(cxoDashboardController.getDepartmentTickets));
 cxoRouter.get("/user/:userId/tickets",requireAuth, asyncHandler(cxoDashboardController.getUserTickets));
 cxoRouter.post("/reassign", requireAuth,asyncHandler(cxoDashboardController.reassignTicket));
+
+
 
 

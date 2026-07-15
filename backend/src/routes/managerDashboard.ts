@@ -14,6 +14,13 @@ managerDashboardRouter.get(
 );
 
 managerDashboardRouter.get(
+  "/tickets",
+  requireAuth,
+  requireRole(UserRole.HOD),
+  managerDashboardController.getDepartmentTickets
+);
+
+managerDashboardRouter.get(
   "/user/:userId/tickets",
   requireAuth,
   requireRole(UserRole.HOD),
@@ -33,3 +40,4 @@ managerDashboardRouter.post(
   requireRole(UserRole.GLOBAL_ADMIN),
   managerDashboardController.setDepartmentManager
 );
+

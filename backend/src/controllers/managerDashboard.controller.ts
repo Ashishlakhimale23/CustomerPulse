@@ -97,6 +97,60 @@ export const managerDashboardController = {
     });
   },
 
+  async getDepartmentTickets(req: AuthedRequest, res: Response) {
+    const managerId = req.user!.id;
+    const { departmentId, filter } = req.query as { departmentId?: string; filter?: string };
+
+    const managedDepartments = await prisma.department.findMany({
+      where: { managerId },
+      select: { id: true, name: true },
+    });
+
+    if (managedDepartments.length === 0) {
+      throw new AppError("You are not assigned to any department", 400);
+    }
+
+    const managedDeptIds = managedDepartments.map((d) => d.id);
+
+    if (departmentId && !managedDeptIds.includes(departmentId)) {
+      throw new AppError("Department is not managed by you", 403);
+    }
+
+    const targetDeptIds = departmentId ? [departmentId] : managedDeptIds;
+
+    const where: any = { departmentId: { in: targetDeptIds } };
+
+    if (filter === "active") {
+      where.status = { not: "RESOLVED" };
+    } else if (filter === "resolved") {
+      where.status = "RESOLVED";
+    } else if (filter === "breached") {
+      where.slaBreached = true;
+      where.status = { not: "RESOLVED" };
+    }
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      include: {
+        assignee: { select: { id: true, fullName: true, email: true } },
+        requester: { select: { id: true, fullName: true, email: true } },
+        category: { select: { name: true } },
+        department: { select: { name: true } },
+        comments: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          include: { user: { select: { fullName: true } } },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      filter: filter || "all",
+      tickets,
+    });
+  },
+
   async getUserTickets(req: AuthedRequest, res: Response) {
     const managerId = req.user!.id;
     const { userId } = req.params;
@@ -268,3 +322,4 @@ export const managerDashboardController = {
     res.json(updated);
   },
 };
+
