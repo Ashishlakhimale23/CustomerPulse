@@ -2,6 +2,10 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 // Get a free hosted Postgres database in seconds: `npx create-db`
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
   provider = "prisma-client"
@@ -329,6 +333,18 @@ model Ticket {
   resolvedAt       DateTime?
   closedAt         DateTime?
 
+  // NOTE(added): SLA/TAT pause-resume tracking. Whenever the ticket leaves
+  // an "active" state (ON_HOLD, or RESOLVED pending a possible reopen),
+  // slaDeadline is cleared and the remaining minutes are parked here; on
+  // resume the deadline picks back up from that remainder instead of
+  // restarting the SLA clock. holdStartedAt/totalHoldMinutes track wall-clock
+  // time spent ON_HOLD specifically, which is subtracted from TAT (turnOverTime)
+  // - unlike SLA, TAT is NOT paused by a RESOLVED->REOPENED cycle, so time
+  // spent resolved still counts toward it.
+  holdStartedAt       DateTime?
+  totalHoldMinutes    Int            @default(0)
+  slaRemainingMinutes Int?
+
   metadata         Json?
   
 
@@ -460,3 +476,4 @@ model AdminMessage {
 
   @@index([userId, createdAt])
 }
+

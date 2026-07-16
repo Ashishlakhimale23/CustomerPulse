@@ -306,7 +306,8 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
         },
         body: JSON.stringify({
           status: newStatus,
-          turnOverTime: getTurnaroundTime().seconds,
+          // turnOverTime (TAT) is computed server-side now - it needs to
+          // account for banked ON_HOLD time the client doesn't track.
           ...(comment && comment.trim() ? { comment: comment.trim() } : {})
         })
       });
@@ -425,42 +426,29 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
     return { text: `${hours}h ${mins}m left`, color: "text-zinc-700 bg-zinc-100 border-zinc-300" };
   };
 
+  // TAT (turnaround time): wall-clock age of the ticket minus time spent
+  // ON_HOLD - mirrors the server-side calc in slaClock.service.ts. Unlike
+  // ON_HOLD, a RESOLVED period is NOT subtracted, so time spent resolved
+  // still counts if the ticket is later reopened. While RESOLVED (and not
+  // reopened since), this is frozen at the value the backend stored at
+  // resolution time rather than continuing to tick.
   const getTurnaroundTime = () :{display:string,seconds:number} => {
     if (!ticket) return {display : "-",seconds:0};
 
-    const sortedHistories = [...statusHistories].sort((a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
-
-    let totalActiveMs = 0;
-    let lastTime = new Date(ticket.createdAt).getTime();
-    let runningStatus: string = sortedHistories.length > 0 && sortedHistories[0].fromStatus ? sortedHistories[0].fromStatus : "OPEN";
-
-    const isActiveWorkingStatus = (s: string) => s === "OPEN" || s === "IN_PROGRESS";
-    const isResolvedOrClosed = (s: string) => s === "RESOLVED" ;
-
-    for (const h of sortedHistories) {
-      const changeTime = new Date(h.changedAt).getTime();
-      if (changeTime > lastTime) {
-        if (isActiveWorkingStatus(runningStatus)) {
-          totalActiveMs += (changeTime - lastTime);
-        }
-        lastTime = changeTime;
-      }
-      runningStatus = h.status;
-      if (isResolvedOrClosed(runningStatus)) {
-        break;
-      }
+    let seconds: number;
+    if (ticket.status === "RESOLVED" && typeof ticket.turnOverTime === "number") {
+      seconds = ticket.turnOverTime;
+    } else {
+      const now = Date.now();
+      const createdAt = new Date(ticket.createdAt).getTime();
+      const totalHoldMinutes = ticket.totalHoldMinutes ?? 0;
+      const ongoingHoldMinutes = ticket.status === "ON_HOLD" && ticket.holdStartedAt
+        ? Math.max(0, Math.round((now - new Date(ticket.holdStartedAt).getTime()) / 60000))
+        : 0;
+      const totalHoldSeconds = (totalHoldMinutes + ongoingHoldMinutes) * 60;
+      seconds = Math.max(0, Math.floor((now - createdAt) / 1000) - totalHoldSeconds);
     }
 
-    const isResolved = isResolvedOrClosed(ticket.status) || ticket.resolvedAt;
-    const endTime = ticket.resolvedAt ? new Date(ticket.resolvedAt).getTime() : (isResolved ? new Date(ticket.updatedAt).getTime() : Date.now());
-
-    if (endTime > lastTime && isActiveWorkingStatus(runningStatus)) {
-      totalActiveMs += (endTime - lastTime);
-    }
-
-    if (totalActiveMs < 0) totalActiveMs = 0;
-
-    const seconds = Math.floor(totalActiveMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);

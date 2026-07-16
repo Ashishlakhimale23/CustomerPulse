@@ -956,7 +956,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           <img src={"../assets/logo.jpg"} className="w-10 h-10" />
           <span className="text-[10px] uppercase font-bold tracking-wider font-mono text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-            SML Operations
+            Customer Pulse
           </span>
         </div>
 

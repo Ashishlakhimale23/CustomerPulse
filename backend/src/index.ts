@@ -49,6 +49,6 @@ app.use(errorHandler);
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
-  startScheduledJobs()
+  
   console.log(`Helpdesk API listening on :${port}`);
 });

@@ -168,6 +168,11 @@ export interface Ticket {
   slaBreached: boolean;
   resolvedAt?: string;
   closedAt?: string;
+  // SLA/TAT pause-resume bookkeeping - see backend slaClock.service.ts.
+  holdStartedAt?: string;
+  totalHoldMinutes?: number;
+  slaRemainingMinutes?: number;
+  turnOverTime?: number;
   tags: string[];
   createdAt: string;
   updatedAt: string;

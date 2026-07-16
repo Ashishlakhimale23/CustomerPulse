@@ -258,30 +258,6 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Representative Name (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. John Doe"
-                      value={newTicketClientRep}
-                      onChange={(e) => setNewTicketClientRep(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Representative Employee ID (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="EMP02"
-                      value={newTicketClientEmpId}
-                      onChange={(e) => setNewTicketClientEmpId(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-                </div>
-
                 <div className="border-t border-slate-100 pt-4">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Ticket Subject / Title *</label>
                   <input

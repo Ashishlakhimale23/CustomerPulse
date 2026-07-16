@@ -639,7 +639,7 @@ export default function CXODashboardMock() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-[18px] font-bold" style={{ color: C.ink }}>SML OPERATIONS — Executive Overview</h1>
+                <h1 className="text-[18px] font-bold" style={{ color: C.ink }}>CUSTOMER PULSE — Executive Overview</h1>
               </div>
               <p className="text-[12.5px]" style={{ color: C.slate }}>Org-wide ticket performance across all departments · updated moments ago</p>
             </div>

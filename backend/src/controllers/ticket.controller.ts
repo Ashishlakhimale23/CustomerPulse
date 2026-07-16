@@ -10,6 +10,7 @@ import { isRequesterOnly } from "../utils/rbac";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
 import { AppError } from "../middleware/errorHandler";
 import { hoursFromNow } from "../utils/time";
+import { computeSlaClockUpdate, computeTurnOverTimeSeconds } from "../services/slaClock.service";
 import { prismaVersion } from "../generated/prisma/internal/prismaNamespace";
 import { notificationService } from "../services/notification.service";
 import { id } from "zod/v4/locales";
@@ -355,7 +356,7 @@ export const ticketController = {
 
   //@ts-ignore
   async update(req: AuthedRequest, res: Response) {
-    const {  status,turnOverTime, comment } = req.body;
+    const { status, comment } = req.body;
 
     // Putting a ticket ON_HOLD requires an explanatory comment - it's
     // recorded on the status history entry (as its note) and also added
@@ -368,6 +369,11 @@ export const ticketController = {
       select :{
         id : true,
         status : true,
+        createdAt: true,
+        slaDeadline: true,
+        slaRemainingMinutes: true,
+        holdStartedAt: true,
+        totalHoldMinutes: true,
         category:{
           select :{
             defaultPriority: true,
@@ -377,17 +383,34 @@ export const ticketController = {
       }
      });
 
+    const now = new Date();
+    // Ticket is put ON_HOLD or RESOLVED -> SLA clock pauses (deadline banked
+    // into slaRemainingMinutes) and, for ON_HOLD specifically, the wall-clock
+    // hold window that TAT subtracts opens/closes. Coming back off either
+    // one resumes the deadline from the banked remainder rather than
+    // granting a fresh window. No-op when status isn't actually changing.
+    const slaClockUpdate = status !== undefined && status !== previous.status
+      ? computeSlaClockUpdate(previous, status, now)
+      : {};
 
     if (status == TicketStatus.REOPENED && previous) {
-      const baseSlaHours = previous.category?.defaultSlaHours ?? BASE_SLA_HOURS_BY_PRIORITY["P3"];
-      const slaDeadline = hoursFromNow(baseSlaHours);
+      // slaClockUpdate already resumes the deadline from where it was
+      // banked when the ticket was resolved. Only a ticket with no banked
+      // remainder at all (e.g. one that predates this tracking) falls back
+      // to a fresh SLA window.
+      const resumedDeadline = slaClockUpdate.slaDeadline
+        ?? (previous.slaRemainingMinutes == null
+          ? hoursFromNow(previous.category?.defaultSlaHours ?? BASE_SLA_HOURS_BY_PRIORITY["P3"])
+          : null);
 
       const ticket = await prisma.ticket.update({
         where : {id : req.params.id},
         data : {
+          ...slaClockUpdate,
           status,
-          slaDeadline : slaDeadline,
-          turnOverTime : 0
+          slaDeadline : resumedDeadline,
+          resolvedAt: null,
+          turnOverTime: computeTurnOverTimeSeconds({ ...previous, ...slaClockUpdate, status }, now),
         }
       })
 
@@ -405,8 +428,13 @@ export const ticketController = {
       const ticket = await prisma.ticket.update({
         where: { id: req.params.id },
         data: {
+          ...slaClockUpdate,
           status,
-          turnOverTime: turnOverTime
+          resolvedAt: now,
+          // TAT is computed server-side from the ticket's own timestamps
+          // (age minus banked ON_HOLD time) rather than trusting whatever
+          // the client sent, so it stays correct across reopen cycles.
+          turnOverTime: computeTurnOverTimeSeconds({ ...previous, ...slaClockUpdate, status }, now),
         },select:{
           id : true,
           requester : true,
@@ -433,7 +461,11 @@ export const ticketController = {
     const ticket = await prisma.ticket.update({
       where: { id: req.params.id },
       data: {
+        ...slaClockUpdate,
         status,
+        ...(status !== undefined && status !== previous.status
+          ? { turnOverTime: computeTurnOverTimeSeconds({ ...previous, ...slaClockUpdate, status }, now) }
+          : {}),
       },
     });
 
@@ -560,4 +592,5 @@ export const ticketController = {
     res.status(204).send();
   },
 };
+
 

@@ -109,7 +109,10 @@ export const escalationService = {
       where: {
         slaDeadline: { lt: new Date() },
         slaBreached: false,
-        status: { notIn: [TicketStatus.RESOLVED] },
+        // ON_HOLD/RESOLVED tickets have their SLA clock paused (slaDeadline
+        // cleared), so this notIn is mostly belt-and-suspenders - the null
+        // deadline already excludes them - but keeps intent explicit.
+        status: { notIn: [TicketStatus.RESOLVED, TicketStatus.ON_HOLD] },
       },
     });
 
@@ -170,3 +173,4 @@ function bumpPriority(p: TicketPriority): TicketPriority {
   const idx = order.indexOf(p);
   return order[Math.max(idx - 1, 0)];
 }
+
