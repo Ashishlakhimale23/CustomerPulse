@@ -6,7 +6,7 @@ import { ASSIGNABLE_AGENT_ROLES } from "../utils/rbac";
 import { AppError } from "../middleware/errorHandler";
 
 
-const OPEN_STATUSES: TicketStatus[] = [ TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD];
+const OPEN_STATUSES: TicketStatus[] = [ TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD, TicketStatus.REOPENED];
 
 export const assignmentService = {
   /**
@@ -38,6 +38,7 @@ export const assignmentService = {
 
     // ---- 1. Category-based match (primary) ----
     if (ticket.categoryId) {
+      console.log("Hitting ticket category")
       const categoryAgents = await prisma.categoryAgent.findMany({
         where: { categoryId: ticket.categoryId },
         include: {
@@ -47,8 +48,10 @@ export const assignmentService = {
         },
       });
 
+      console.log("agents with same categories as mentioned in the ticket",categoryAgents)
+
       let eligible 
-      if (categoryAgents.length > 2){
+      if (categoryAgents.length >= 1){
 
         eligible = categoryAgents
         .filter((ca) => !ticket.supportLevel || ca.agent.supportLevel === ticket.supportLevel)

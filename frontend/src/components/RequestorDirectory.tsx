@@ -114,21 +114,7 @@ export const RequestorDirectory = (
         )}
       </div>
 
-      <div className="flex gap-2">
-        {(["ALL", "PENDING", "APPROVED", "REJECTED"] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
-              filter === f
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      
 
       <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">

@@ -17,6 +17,17 @@ interface InvitationComponentProps {
   apiFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
+const STATES = [
+  "Maharashtra",
+  "Karnataka",
+  "Gujarat",
+  "Tamil Nadu",
+  "Delhi",
+  "Telangana",
+  "Kerala",
+];
+
+
 export const InvitationComponent: React.FC<InvitationComponentProps> = ({
   setInviteDeptId,
   setError,
@@ -39,8 +50,26 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
   const [inviteRole, setInviteRole] = useState<UserRole>(UserRole.REQUESTER);
   const [inviteDeptIds, setInviteDeptIds] = useState<string[]>([]);
 
+  const [selectedState, setSelectedState] = useState<string>("");
   const isExecutiveRole = inviteRole === UserRole.HOD || inviteRole === UserRole.CXO;
 
+
+
+  const handleRoleChange = (newRole: UserRole) => {
+    setInviteRole(newRole);
+
+    if (newRole !== UserRole.AGENT) {
+      setSelectedState("");
+    }
+
+    // Reset category/department selections appropriately when switching roles
+    if (newRole === UserRole.HOD || newRole === UserRole.CXO) {
+      setInviteCategoryIds([]);
+      setInviteDeptId("");
+    } else {
+      setInviteDeptIds([]);
+    }
+  };
   const handleInviteDeptChange = async (deptId: string) => {
     setInviteDeptId(deptId);
     setInviteDeptCategories([]);
@@ -61,16 +90,6 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
     }
   };
 
-  const handleRoleChange = (newRole: UserRole) => {
-    setInviteRole(newRole);
-    // Reset category/department selections appropriately when switching roles
-    if (newRole === UserRole.HOD || newRole === UserRole.CXO) {
-      setInviteCategoryIds([]);
-      setInviteDeptId("");
-    } else {
-      setInviteDeptIds([]);
-    }
-  };
 
   // Action: Invite someone
   const handleSendInvite = async (e: React.FormEvent) => {
@@ -96,7 +115,12 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
         departmentId: !isExecutiveRole ? (inviteDeptId || null) : null,
         departmentIds: isExecutiveRole ? inviteDeptIds : [],
         categoryIds: !isExecutiveRole ? inviteCategoryIds : [],
-        supportLevel: inviteRole == UserRole.AGENT ? SupportLevel.L1 : SupportLevel.L2
+        supportLevel: inviteRole == UserRole.AGENT ? SupportLevel.L1 : SupportLevel.L2,
+        state:
+          inviteRole === UserRole.AGENT && selectedState
+            ? selectedState
+            : null,
+
       };
 
       const res = await requestFn("http://localhost:3000/invitations", {
@@ -114,6 +138,7 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
       setName("");
       setInviteEmail("");
       setInviteCategoryIds([]);
+      setSelectedState("");
       setInviteDeptIds([]);
       setInviteDeptId("");
       fetchInvitations();
@@ -281,6 +306,29 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
                 ))}
               </select>
             </div>
+
+            {/* if agent is selected add the state drop it should be optional*/}
+            {/* State (Optional - AGENT only) */}
+            {inviteRole === UserRole.AGENT && (
+              <div>
+                <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                  State (Optional)
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => setSelectedState(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-zinc-300 bg-white"
+                >
+                  <option value="">-- Select State --</option>
+
+                  {STATES.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* 4. Department (Single select for normal roles, Multi-select for HOD/CXO) */}
             {

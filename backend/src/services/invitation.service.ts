@@ -31,12 +31,13 @@ export const invitationService = {
     email: string;
     role: UserRole;
     name : string,
+    state : string,
     departmentId: string;
     departmentIds : string[],
     categoryIds : string[]
     supportLevel: SupportLevel;
   }) {
-    const { name, inviter, email, role, departmentId,departmentIds, supportLevel, categoryIds } = params;
+    const { name, inviter, email, role, departmentId,departmentIds, supportLevel, categoryIds,state } = params;
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) throw new InvitationError("A user with this email already exists");
@@ -49,7 +50,7 @@ export const invitationService = {
     const password = "12345"
     const passwordHash = await bcrypt.hash(password, 10);
     let invitation
-    if(role == UserRole.CXO || role == UserRole.HOD){
+    if (role == UserRole.CXO || role == UserRole.HOD) {
       invitation = await prisma.invitation.create({
         data: {
           name,
@@ -57,6 +58,7 @@ export const invitationService = {
           Password: passwordHash,
           invitedById: inviter.id,
           role,
+          state,
           department: {
             connect: departmentIds.map(id => ({ id }))
           },
@@ -68,7 +70,27 @@ export const invitationService = {
           expiresAt: daysFromNow(INVITATION_TTL_DAYS),
         },
       });
-    }else{
+    } else if (role == UserRole.AGENT) {
+      invitation = await prisma.invitation.create({
+        data: {
+          name,
+          email,
+          Password: passwordHash,
+          invitedById: inviter.id,
+          state,
+          role,
+          department: {
+            connect: { id: departmentId }
+          },
+          categories: {
+            connect: categoryIds.map(id => ({ id }))
+          },
+          supportLevel,
+          token: generateToken(),
+          expiresAt: daysFromNow(INVITATION_TTL_DAYS),
+        },
+      });
+    } else {
       invitation = await prisma.invitation.create({
         data: {
           name,
@@ -81,11 +103,7 @@ export const invitationService = {
           expiresAt: daysFromNow(INVITATION_TTL_DAYS),
         },
       });
-
-
     }
-
-
 
     await notificationService.sendInvitation(email, invitation.token, role, password);
     return invitation;
@@ -139,12 +157,7 @@ export const invitationService = {
               },
               supportLevel: invitation.supportLevel,
               onboardedById: invitation.invitedById,
-
-              categoryAssignments: {
-                create: invitation.categories.map((category) => ({
-                  categoryId: category.id,
-                })),
-              },
+              
             },
             include: {
               categoryAssignments: true,
@@ -181,12 +194,6 @@ export const invitationService = {
               },
               supportLevel: invitation.supportLevel,
               onboardedById: invitation.invitedById,
-
-              categoryAssignments: {
-                create: invitation.categories.map((category) => ({
-                  categoryId: category.id,
-                })),
-              },
             },
             include: {
               categoryAssignments: true,
@@ -217,6 +224,7 @@ export const invitationService = {
               fullName: invitation.name,
               passwordHash: invitation.Password,
               role: invitation.role,
+              state : invitation.state,
               agentsdepartmentId: deparmentId ,
               supportLevel: invitation.supportLevel,
               onboardedById: invitation.invitedById,
@@ -244,9 +252,35 @@ export const invitationService = {
           return created;
         });
         break
+      case 'REQUESTER' :
+        user = await prisma.$transaction(async (tx) => {
+          const created = await tx.user.create({
+            data: {
+              email: invitation.email,
+              fullName: invitation.name,
+              passwordHash: invitation.Password,
+              role: invitation.role,
+              onboardedById: invitation.invitedById,
+            },
+            include: {
+              categoryAssignments: true,
+              assignedDepartment: true,
+              managedDepartments: true,
+              coxDepartements: true,
+            },
+          });
+
+          await tx.invitation.update({
+            where: { id: invitation.id },
+            data: {
+              status: InvitationStatus.ACCEPTED,
+            },
+          });
+
+          return created;
+        });
+        break
     }
-
-
 
     if(!user) throw new InvitationError("User cannot be created")
 

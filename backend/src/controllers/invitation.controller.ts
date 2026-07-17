@@ -15,6 +15,7 @@ export const invitationController = {
         return res.status(401).json({ message: "no inviter found" })
       }
 
+      // take stae if agenta
       const invitation = await invitationService.createInvitation({
         inviter: {
           id: inviter.id,
@@ -23,6 +24,7 @@ export const invitationController = {
         email: req.body.email,
         role: req.body.role,
         name: req.body.name,
+        state : req.body.state,
         departmentId: req.body.departmentId,
         departmentIds : req.body.departmentIds,
         categoryIds: req.body.categoryIds,
