@@ -2,7 +2,7 @@ import { FileText } from "lucide-react"
 import { useState } from "react";
 import { Department, TicketCategory, Client, PAGES, SubDepartment } from "../types";
 import AttachmentUploader from "./AttachmentUploader";
-import { uploadAttachmentToS3 } from "../utils/attachmentUpload";
+import { uploadAttachmentToS3 } from "../libs/attachmentUpload";
 
 export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentView,token,departments,clients}:{
     setError:React.Dispatch<React.SetStateAction<string>>,

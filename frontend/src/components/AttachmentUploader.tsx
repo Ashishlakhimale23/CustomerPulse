@@ -8,7 +8,7 @@ import {
   formatBytes,
   uploadAttachmentToS3,
   validateAttachmentFile,
-} from "../utils/attachmentUpload";
+} from "../libs/attachmentUpload";
 
 interface QueueItem {
   id: string;
