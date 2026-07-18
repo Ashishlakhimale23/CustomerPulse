@@ -15,6 +15,18 @@ function layout(title: string, bodyHtml: string) {
 }
 
 export const notificationService = {
+  async sendPasswordResetOtp(email: string, otp: string) {
+    await sendMail({
+      to: email,
+      subject: `Your password reset code`,
+      html: layout("Reset your password", `
+        <p>We received a request to reset the password for this account.</p>
+        <p style="font-size:28px;font-weight:bold;letter-spacing:6px;margin:16px 0">${otp}</p>
+        <p>This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+      `),
+    });
+  },
+
   async sendInvitation(email: string, token: string, role: string,password:string) {
     const link = `http://localhost:5173/invitations/accept?token=${token}`;
     await sendMail({
