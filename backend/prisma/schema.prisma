@@ -80,6 +80,16 @@ enum SuggestionStatus {
   REJECTED
 }
 
+// NOTE(added): the requester's organizational designation, captured on the
+// ticket intake form as a dropdown - distinct from UserRole (platform role).
+enum Designation {
+  CEO
+  COO
+  CXO
+  HOD
+  EMPLOYEE
+}
+
 
 
 // client list that was static on the frontend it should be on the backend and the global admin should be able to edit it 
@@ -111,6 +121,9 @@ model Project {
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // NOTE(added): tickets can optionally be filed against a specific project.
+  tickets Ticket[]
 
   @@unique([clientId, name])
 }
@@ -364,6 +377,12 @@ model Ticket {
   site             String
   turnoverRate     Float? 
 
+  // NOTE(added): requester's designation at the client organization, and the
+  // specific project (under the selected client) the ticket relates to.
+  designation      Designation?
+  projectId        String?
+  project          Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   status           TicketStatus   @default(OPEN)
   priority         TicketPriority @default(P3)
   internalPriority TicketPriority @default(P3)
@@ -541,6 +560,8 @@ model AdminMessage {
 
   @@index([userId, createdAt])
 }
+
+
 
 
 
