@@ -31,6 +31,24 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+// Forgot-password flow: request an OTP, verify it, then reset the password.
+// Kept as three separate schemas/endpoints so the reset step can require a
+// short-lived "verified" proof rather than trusting the OTP is still valid.
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email(),
+});
+
+export const verifyPasswordResetOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d{6}$/, "OTP must be 6 digits"),
+});
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d{6}$/, "OTP must be 6 digits"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 export const acceptInvitationSchema = z.object({
   token: z.string().min(32),
   fullName: z.string().min(1).max(200),
