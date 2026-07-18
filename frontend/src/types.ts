@@ -179,6 +179,10 @@ export interface Ticket {
   dateOfOccurance: string;
   site: string;
   state: string;
+  // NOTE(added): requester's designation at the client org, and the project
+  // (under the ticket's client) this issue relates to.
+  designation?: "CEO" | "COO" | "CXO" | "HOD" | "EMPLOYEE";
+  projectId?: string;
   status: TicketStatus;
   priority: TicketPriority;
   internalPriority: TicketPriority;
