@@ -1,6 +1,8 @@
 import { FileText } from "lucide-react"
 import { useState } from "react";
 import { Department, TicketCategory, Client, PAGES, SubDepartment } from "../types";
+import AttachmentUploader from "./AttachmentUploader";
+import { uploadAttachmentToS3 } from "../utils/attachmentUpload";
 
 export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentView,token,departments,clients}:{
     setError:React.Dispatch<React.SetStateAction<string>>,
@@ -25,8 +27,8 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
   const [newTicketProjectId, setNewTicketProjectId] = useState("");
   const [newTicketDateOccurred, setNewTicketDateOccurred] = useState("");
   const [newTicketTags, setNewTicketTags] = useState<string>("");
-  const [newTicketAttachName, setNewTicketAttachName] = useState("");
-  const [newTicketAttachUrl, setNewTicketAttachUrl] = useState("");
+  const [newTicketAttachFiles, setNewTicketAttachFiles] = useState<File[]>([]);
+  const [attachmentUploadError, setAttachmentUploadError] = useState("");
   const [deptCategories, setDeptCategories] = useState<TicketCategory[]>([]);
   const [deptSubDepartments, setDeptSubDepartments] = useState<SubDepartment[]>([]);
   const [newTicketSubDepartment, setNewTicketSubDepartment] = useState("");
@@ -116,16 +118,18 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit ticket");
 
-      // Post attachment if provided
-      if (newTicketAttachName.trim() && newTicketAttachUrl.trim()) {
-        await fetch(`http://localhost:3000/tickets/${data.id}/attachments`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ fileName: newTicketAttachName.trim(), fileUrl: newTicketAttachUrl.trim() })
-        });
+      // Upload any staged attachments straight to S3 now that the ticket has an id
+      if (newTicketAttachFiles.length > 0) {
+        setAttachmentUploadError("");
+        const results = await Promise.allSettled(
+          newTicketAttachFiles.map((file) => uploadAttachmentToS3(file, data.id, token))
+        );
+        const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+        if (failed.length > 0) {
+          setAttachmentUploadError(
+            `Ticket ${data.ticketNumber || data.id} was created, but ${failed.length} attachment(s) failed to upload. You can add them from the ticket detail page.`
+          );
+        }
       }
 
       // Reset
@@ -145,8 +149,7 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
       setNewTicketProjectId("");
       setNewTicketDateOccurred("");
       setNewTicketTags("");
-      setNewTicketAttachName("");
-      setNewTicketAttachUrl("");
+      setNewTicketAttachFiles([]);
 
       // Navigate to detailed ticket view directly
       setSelectedTicketId(data.id);
@@ -387,27 +390,16 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
 
                
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Attachment File Name (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. error_screenshot.png"
-                      value={newTicketAttachName}
-                      onChange={(e) => setNewTicketAttachName(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Attachment URL / Document Link (Optional)</label>
-                    <input
-                      type="url"
-                      placeholder="https://storage.company.com/files/error.png"
-                      value={newTicketAttachUrl}
-                      onChange={(e) => setNewTicketAttachUrl(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    />
-                  </div>
+                <div className="pt-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Attachments (Optional)</label>
+                  <AttachmentUploader
+                    token={token}
+                    stagedFiles={newTicketAttachFiles}
+                    onStagedFilesChange={setNewTicketAttachFiles}
+                  />
+                  {attachmentUploadError && (
+                    <p className="mt-2 text-[11px] text-amber-600">{attachmentUploadError}</p>
+                  )}
                 </div>
 
                 <div className="border-t border-slate-100 pt-4 flex gap-2 justify-end">
