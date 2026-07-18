@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../lib/database";
-import { TicketPriority, TicketStatus } from "../generated/prisma/client";
+import { TicketPriority, TicketStatus, UserRole } from "../generated/prisma/client";
 import { diffInMinutes, addMinutes } from "../utils/time";
 
 // Baseline minutes used when a ticket has no category, or its category
@@ -51,28 +51,58 @@ function resolveConsumedMinutes(
   return Math.max(0, total - remaining);
 }
 
+// NOTE(added): isWorkStopping / isSafetyViolation are set by an admin when
+// configuring a category and are only ever meant to be seen by the roles
+// that can configure categories (GLOBAL_ADMIN, HOD) - requesters/agents/
+// CXOs fetching the category list (e.g. for the ticket form) never get
+// these two fields back.
+const ADMIN_ONLY_FIELD_ROLES: UserRole[] = [UserRole.GLOBAL_ADMIN, UserRole.HOD];
+
+function stripAdminOnlyFields<T extends { isWorkStopping?: boolean; isSafetyViolation?: boolean }>(
+  category: T,
+  role: UserRole | undefined
+): T {
+  if (role && ADMIN_ONLY_FIELD_ROLES.includes(role)) return category;
+  const { isWorkStopping, isSafetyViolation, ...rest } = category;
+  return rest as T;
+}
+
 export const ticketCategoryController = {
   // POST /departments/:departmentId/categories
-  // { name, defaultSlaMinutes, defaultPriority, minSupportLevel }  (DEPT_ADMIN, GLOBAL_ADMIN)
-  // This is where the SLA/priority defaults ticketService reads from get configured.
+  // { name, defaultSlaMinutes, defaultPriority, subDepartmentId?, isWorkStopping?, isSafetyViolation? }
+  // (GLOBAL_ADMIN, HOD). This is where the SLA/priority defaults
+  // ticketService reads from get configured, along with the optional
+  // sub-department scoping and the admin-only classification flags.
   async create(req: AuthedRequest, res: Response) {
     const category = await prisma.ticketCategory.create({
       data: {
         departmentId: req.params.departmentId,
+        subDepartmentId: req.body.subDepartmentId || null,
         name: req.body.name,
         defaultSlaMinutes: req.body.defaultSlaMinutes,
         defaultPriority: req.body.defaultPriority,
+        isWorkStopping: !!req.body.isWorkStopping,
+        isSafetyViolation: !!req.body.isSafetyViolation,
       },
     });
     res.status(201).json(category);
   },
 
-  // GET /departments/:departmentId/categories
+  // GET /departments/:departmentId/categories?subDepartmentId=...
+  // When subDepartmentId is provided, only categories mapped to that
+  // sub-department are returned (a subset of the department's categories).
+  // When it's omitted, every category under the department is returned,
+  // regardless of whether it's mapped to a sub-department or not - this is
+  // what the ticket form uses before a sub-department has been chosen.
   async list(req: AuthedRequest, res: Response) {
+    const { subDepartmentId } = req.query;
     const categories = await prisma.ticketCategory.findMany({
-      where: { departmentId: req.params.departmentId },
+      where: {
+        departmentId: req.params.departmentId,
+        ...(subDepartmentId ? { subDepartmentId: String(subDepartmentId) } : {}),
+      },
     });
-    res.json(categories);
+    res.json(categories.map((c) => stripAdminOnlyFields(c, req.user?.role)));
   },
 
   // PATCH /categories/:id
@@ -97,6 +127,15 @@ export const ticketCategoryController = {
         name: req.body.name,
         defaultSlaMinutes: req.body.defaultSlaMinutes,
         defaultPriority: req.body.defaultPriority,
+        ...(req.body.subDepartmentId !== undefined
+          ? { subDepartmentId: req.body.subDepartmentId || null }
+          : {}),
+        ...(req.body.isWorkStopping !== undefined
+          ? { isWorkStopping: !!req.body.isWorkStopping }
+          : {}),
+        ...(req.body.isSafetyViolation !== undefined
+          ? { isSafetyViolation: !!req.body.isSafetyViolation }
+          : {}),
       },
     });
 
@@ -149,6 +188,9 @@ export const ticketCategoryController = {
     res.status(200).json({message:"delete the category"})
   }
 
+
+  
+};
 
   
 };
