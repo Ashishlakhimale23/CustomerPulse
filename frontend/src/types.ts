@@ -20,6 +20,15 @@ export enum TicketPriority {
   P4 = "P4"
 }
 
+// NOTE(added): separate scale for the internal triage metric - see
+// backend internalPriority.service.ts for how this is computed.
+export enum InternalPriorityLevel {
+  CRITICAL = "CRITICAL",
+  HIGH = "HIGH",
+  MEDIUM = "MEDIUM",
+  LOW = "LOW"
+}
+
 export enum TicketStatus {
   OPEN = "OPEN",
   IN_PROGRESS = "IN_PROGRESS",
@@ -185,7 +194,7 @@ export interface Ticket {
   projectId?: string;
   status: TicketStatus;
   priority: TicketPriority;
-  internalPriority: TicketPriority;
+  internalPriority: InternalPriorityLevel;
   assigneeId?: string;
   assignedById?: string;
   assignmentMethod?: string;
