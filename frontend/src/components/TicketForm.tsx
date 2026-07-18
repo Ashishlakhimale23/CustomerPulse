@@ -21,6 +21,9 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
   const [newTicketClientEmpId, setNewTicketClientEmpId] = useState("");
   const [newTicketSite, setNewTicketSite] = useState("");
   const [newTicketState, setNewTicketState] = useState("");
+  const [newTicketDesignation, setNewTicketDesignation] = useState("");
+  const [newTicketProjectId, setNewTicketProjectId] = useState("");
+  const [newTicketDateOccurred, setNewTicketDateOccurred] = useState("");
   const [newTicketTags, setNewTicketTags] = useState<string>("");
   const [newTicketAttachName, setNewTicketAttachName] = useState("");
   const [newTicketAttachUrl, setNewTicketAttachUrl] = useState("");
@@ -79,7 +82,7 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
     e.preventDefault();
     setError("");
     setSuccess("");
-    if (!newTicketDept || !newTicketTitle || !newTicketClient || !newTicketClientEmail || !newTicketSite || !newTicketState) {
+    if (!newTicketDept || !newTicketTitle || !newTicketClient || !newTicketClientEmail || !newTicketSite || !newTicketState || !newTicketDesignation || !newTicketDateOccurred) {
       setError("Please fill out all required fields.");
       return;
     }
@@ -102,9 +105,11 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
           clientEmail: newTicketClientEmail,
           representative: newTicketClientRep,
           employeeId: newTicketClientEmpId ,
-          dateOfOccurance: new Date().toISOString(),
+          dateOfOccurance: new Date(newTicketDateOccurred).toISOString(),
           site: newTicketSite,
           state: newTicketState,
+          designation: newTicketDesignation,
+          projectId: newTicketProjectId || undefined,
           tags: [] 
         })
       });
@@ -136,6 +141,9 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
       setNewTicketClientEmpId("");
       setNewTicketSite("");
       setNewTicketState("");
+      setNewTicketDesignation("");
+      setNewTicketProjectId("");
+      setNewTicketDateOccurred("");
       setNewTicketTags("");
       setNewTicketAttachName("");
       setNewTicketAttachUrl("");
@@ -217,7 +225,10 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Client Business/Company *</label>
                     <select
                       value={newTicketClient}
-                      onChange={(e) => setNewTicketClient(e.target.value)}
+                      onChange={(e) => {
+                        setNewTicketClient(e.target.value);
+                        setNewTicketProjectId("");
+                      }}
                       className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
                       required
                     >
@@ -229,6 +240,24 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
                   </div>
 
                   <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Project</label>
+                    <select
+                      value={newTicketProjectId}
+                      onChange={(e) => setNewTicketProjectId(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer disabled:bg-slate-50 disabled:cursor-not-allowed"
+                      disabled={!newTicketClient}
+                    >
+                      <option value="">-- Choose Project --</option>
+                      {Array.isArray(clients) && clients
+                        .find(c => c.name === newTicketClient)?.projects?.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}{p.isShutdownJob ? " (Shutdown Job)" : ""}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Client Authorized Email *</label>
                     <input
                       type="email"
@@ -239,7 +268,38 @@ export const TicketForm = ({setError,setSuccess,setSelectedTicketId,setCurrentVi
                       required
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Requester Designation *</label>
+                    <select
+                      value={newTicketDesignation}
+                      onChange={(e) => setNewTicketDesignation(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Choose Designation --</option>
+                      <option value="CEO">CEO</option>
+                      <option value="COO">COO</option>
+                      <option value="CXO">CXO</option>
+                      <option value="HOD">HOD</option>
+                      <option value="EMPLOYEE">EMPLOYEE</option>
+                    </select>
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Issue Occurred (Date & Time) *</label>
+                    <input
+                      type="datetime-local"
+                      value={newTicketDateOccurred}
+                      onChange={(e) => setNewTicketDateOccurred(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
