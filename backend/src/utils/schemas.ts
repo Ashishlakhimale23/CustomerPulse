@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserRole, SupportLevel, TicketStatus, TicketPriority } from "../generated/prisma/client";
+import { UserRole, SupportLevel, TicketStatus, TicketPriority, Designation } from "../generated/prisma/client";
 
 // Kept close to the controllers that use them rather than one giant
 // file per resource - easier to see the shape a given endpoint expects
@@ -38,6 +38,11 @@ export const createTicketSchema = z.object({
   dateOfOccurance: z.coerce.date(),
   site: z.string().min(1).max(200),
   state: z.string().min(1).max(100),
+  // NOTE(added): requester's designation at the client org, and the specific
+  // project (under the selected client) the ticket relates to - both optional
+  // since not every client has projects configured yet.
+  designation: z.nativeEnum(Designation).optional(),
+  projectId: z.string().uuid().optional(),
 });
 
 export const updateTicketSchema = z
@@ -130,5 +135,3 @@ export const createAuditLogSchema = z.object({
   entityType: z.string().min(1).max(50),
   entityId: z.string().optional(),
 });
-
-
