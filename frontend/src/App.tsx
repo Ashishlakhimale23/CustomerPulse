@@ -95,6 +95,15 @@ export default function App() {
   const [signupEmployeeId, setSignupEmployeeId] = useState("");
   const [signupMode, setSignupMode] = useState(false);
 
+  // Forgot Password State
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotOtpVerified, setForgotOtpVerified] = useState(false);
+
   // Accept Invite State
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteFullName, setInviteFullName] = useState("");
@@ -479,6 +488,104 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Forgot Password - Step 1: request an OTP by email
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not send verification code");
+
+      setSuccess(data.message || "If an account exists for this email, a verification code has been sent.");
+      setForgotStep("verify");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forgot Password - Step 2: verify the OTP the user received by email
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/auth/verify-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid or expired code");
+
+      setForgotOtpVerified(true);
+      setSuccess("Code verified. Choose a new password.");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forgot Password - Step 3: set the new password
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, password: forgotNewPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not reset password");
+
+      setSuccess(data.message || "Password reset successfully. You can now log in.");
+      // Reset all forgot-password state and drop back to the login form
+      // pre-filled with the email so the user can sign straight in.
+      setLoginEmail(forgotEmail);
+      setLoginPassword("");
+      setForgotMode(false);
+      setForgotStep("request");
+      setForgotOtpVerified(false);
+      setForgotEmail("");
+      setForgotOtp("");
+      setForgotNewPassword("");
+      setForgotConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exitForgotPasswordFlow = () => {
+    setForgotMode(false);
+    setForgotStep("request");
+    setForgotOtpVerified(false);
+    setForgotEmail("");
+    setForgotOtp("");
+    setForgotNewPassword("");
+    setForgotConfirmPassword("");
+    setError("");
+    setSuccess("");
   };
 
   // Accept Invite Handler
@@ -869,7 +976,145 @@ export default function App() {
       );
     }
 
-    // 2. Main Login / Public Requester Signup
+    // 2. Forgot Password (OTP request -> verify + reset)
+    if (forgotMode) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
+          <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
+            <div className="text-center mb-6">
+              <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
+                <Key size={24} />
+              </span>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reset Password</h1>
+              <p className="text-xs text-slate-500 mt-1">
+                {forgotStep === "request"
+                  ? "Enter your account email and we'll send you a verification code."
+                  : forgotOtpVerified
+                  ? "Choose a new password for your account."
+                  : "Enter the 6-digit code we emailed you."}
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
+                <ShieldAlert size={16} />
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 rounded-lg">
+                {success}
+              </div>
+            )}
+
+            {forgotStep === "request" && (
+              <form onSubmit={handleRequestOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email</label>
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
+                >
+                  {loading ? "Sending Code..." : "Send Verification Code"}
+                </button>
+              </form>
+            )}
+
+            {forgotStep === "verify" && !forgotOtpVerified && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Verification Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6-digit code"
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white tracking-[0.3em] text-center font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                    required
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Sent to {forgotEmail}. Expires in 10 minutes.</p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || forgotOtp.length !== 6}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? "Verifying..." : "Verify Code"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRequestOtp}
+                  disabled={loading}
+                  className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
+                >
+                  Resend code
+                </button>
+              </form>
+            )}
+
+            {forgotStep === "verify" && forgotOtpVerified && (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
+                  <input
+                    type="password"
+                    placeholder="Choose a new password"
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                    required
+                    minLength={8}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    placeholder="Re-enter new password"
+                    value={forgotConfirmPassword}
+                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                    required
+                    minLength={8}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
+                >
+                  {loading ? "Resetting..." : "Reset Password"}
+                </button>
+              </form>
+            )}
+
+            <div className="mt-4 text-center">
+              <button
+                onClick={exitForgotPasswordFlow}
+                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
+              >
+                Go back to login screen
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 3. Main Login / Public Requester Signup
       return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
         <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
@@ -991,6 +1236,21 @@ export default function App() {
                   className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
                   required
                 />
+              </div>
+
+              <div className="flex justify-end -mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotMode(true);
+                    setForgotEmail(loginEmail);
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <button
