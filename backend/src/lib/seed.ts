@@ -11,14 +11,21 @@ const TEST_PASSWORD = "12345";
 
 export const CLIENT_OPTIONS: {
     name : string,
-    projectName : string,
+    isKeyClient : boolean,
+    projects : { name: string, isShutdownJob: boolean }[],
   }[] = [
   {
     name : "AADITYA FINANCE & VENTURES",
-    projectName : "finance"
+    isKeyClient : true,
+    projects : [
+      { name : "finance", isShutdownJob : false },
+    ],
   },{
     name : "AASIAN SHIPPING AGENCIES" ,
-    projectName : "shipping",
+    isKeyClient : false,
+    projects : [
+      { name : "shipping", isShutdownJob : false },
+    ],
   }
 ];
 
@@ -239,13 +246,26 @@ async function main() {
   }
   
 
-    await prisma.client.createMany({
-      data: CLIENT_OPTIONS.map((client) => ({
-        name : client.name,
-        projectName : client.projectName
-      })),
-      skipDuplicates: true, // Prevents duplicate inserts
-    });
+    // NOTE(updated): createMany can't do nested writes, and each client can
+    // now have multiple projects, so we create clients one at a time
+    // (skipping ones that already exist) and nested-create their projects.
+    for (const client of CLIENT_OPTIONS) {
+      const existing = await prisma.client.findFirst({ where: { name: client.name } });
+      if (existing) continue;
+
+      await prisma.client.create({
+        data: {
+          name: client.name,
+          isKeyClient: client.isKeyClient,
+          projects: {
+            create: client.projects.map((p) => ({
+              name: p.name,
+              isShutdownJob: p.isShutdownJob,
+            })),
+          },
+        },
+      });
+    }
 
     console.log("client seeded successfully!");
 
