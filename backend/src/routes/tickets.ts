@@ -82,4 +82,4 @@ ticketRouter.get("/:ticketId/comments", requireAuth, commentController.list);
 ticketRouter.post("/:ticketId/attachments/presign", requireAuth, asyncHandler(attachmentController.presign));
 ticketRouter.post("/:ticketId/attachments", requireAuth, asyncHandler(attachmentController.create));
 ticketRouter.get("/:ticketId/attachments", requireAuth, asyncHandler(attachmentController.list));
-
+ticketRouter.delete("/:ticketId/attachments/:attachmentId", requireAuth, asyncHandler(attachmentController.remove));
