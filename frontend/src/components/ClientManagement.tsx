@@ -23,9 +23,11 @@ export default function ClientManagement({ token }: ClientManagementProps) {
   // client create/edit
   const [newClientName, setNewClientName] = useState("");
   const [newClientIsKey, setNewClientIsKey] = useState(false);
+  const [newClientIsWind, setNewClientIsWind] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editClientName, setEditClientName] = useState("");
   const [editClientIsKey, setEditClientIsKey] = useState(false);
+  const [editClientIsWind, setEditClientIsWind] = useState(false);
 
   // client delete
   const [deleteClientId, setDeleteClientId] = useState<string>("");
@@ -84,13 +86,14 @@ export default function ClientManagement({ token }: ClientManagementProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: newClientName.trim(), isKeyClient: newClientIsKey })
+        body: JSON.stringify({ name: newClientName.trim(), isKeyClient: newClientIsKey, isWindClient: newClientIsWind })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to create client");
       setSuccess("Client added successfully.");
       setNewClientName("");
       setNewClientIsKey(false);
+      setNewClientIsWind(false);
       fetchClients();
     } catch (err: any) {
       setError(err.message);
@@ -109,7 +112,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: editClientName.trim(), isKeyClient: editClientIsKey })
+        body: JSON.stringify({ name: editClientName.trim(), isKeyClient: editClientIsKey, isWindClient: editClientIsWind })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update client");
@@ -276,6 +279,9 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                             <Star size={10} /> Key Client
                           </span>
                         )}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${c.isWindClient ? "bg-sky-50 border-sky-200 text-sky-700" : "bg-slate-100 border-slate-200 text-slate-600"}`}>
+                          {c.isWindClient ? "Wind" : "Non-Wind"}
+                        </span>
                         <span className="text-[10px] text-slate-400 font-mono">
                           {c.projects?.length || 0} project{c.projects?.length === 1 ? "" : "s"}
                         </span>
@@ -287,6 +293,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                             setEditingClient(c);
                             setEditClientName(c.name);
                             setEditClientIsKey(c.isKeyClient);
+                            setEditClientIsWind(c.isWindClient);
                           }}
                           className="p-1.5 text-slate-500 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 rounded"
                           title="Edit Client"
@@ -453,6 +460,14 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                 />
                 Key Client
               </label>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={editClientIsWind}
+                  onChange={(e) => setEditClientIsWind(e.target.checked)}
+                />
+                Wind Client <span className="font-normal text-slate-400">(unchecked = Non-Wind)</span>
+              </label>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
@@ -460,6 +475,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                     setEditingClient(null);
                     setEditClientName("");
                     setEditClientIsKey(false);
+                    setEditClientIsWind(false);
                   }}
                   className="px-3.5 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer"
                 >
@@ -494,6 +510,14 @@ export default function ClientManagement({ token }: ClientManagementProps) {
                   onChange={(e) => setNewClientIsKey(e.target.checked)}
                 />
                 Key Client
+              </label>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={newClientIsWind}
+                  onChange={(e) => setNewClientIsWind(e.target.checked)}
+                />
+                Wind Client <span className="font-normal text-slate-400">(unchecked = Non-Wind)</span>
               </label>
               <p className="text-[11px] text-slate-400">You can add projects for this client after it's created, from the list on the left.</p>
               <div className="flex justify-end">
