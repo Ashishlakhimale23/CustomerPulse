@@ -695,7 +695,21 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                   Priority: {ticket.priority}
                 </span>
 
-                
+                {/* Internal-only triage metric - separate from the customer-facing
+                    Priority above, purely informational, never manually overridden. */}
+                <span
+                  className={`text-xs font-bold px-2.5 py-1 border font-mono rounded-md ${
+                    ticket.internalPriority === "CRITICAL"
+                      ? "bg-red-50 text-red-800 border-red-200"
+                      : ticket.internalPriority === "HIGH"
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : ticket.internalPriority === "MEDIUM"
+                          ? "bg-slate-100 text-slate-800 border-slate-200"
+                          : "bg-slate-50 text-slate-800 border-slate-200"
+                  }`}
+                >
+                  Internal Priority: {ticket.internalPriority}
+                </span>
               </div>
             </div>
 
@@ -707,20 +721,12 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             {/* Structured ticket metadata */}
             <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-mono text-slate-600">
               <div>
-                <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Representative</span>
-                <span className="font-semibold text-slate-900">{ticket.representative || "Unspecified"}</span>
-              </div>
-              <div>
                 <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Employee ID</span>
                 <span className="font-semibold text-slate-900">{ticket.employeeId || "Unspecified"}</span>
               </div>
               <div>
                 <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Client / Company</span>
                 <span className="font-semibold text-slate-900">{ticket.clientName}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Client Email</span>
-                <span className="font-semibold text-slate-900">{ticket.clientEmail}</span>
               </div>
               <div>
                 <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Site / Location</span>
