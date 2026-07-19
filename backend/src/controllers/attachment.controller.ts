@@ -11,15 +11,18 @@ import {
   MAX_ATTACHMENT_SIZE_BYTES,
 } from "../lib/s3";
 
-// File bytes are uploaded directly to S3 from the browser via a presigned
-// URL (see `presign` below) - they never pass through this API. Once the
-// upload succeeds client-side, `create` is called to record the resulting
-// object's metadata against the ticket.
+// S3 logic is commented out for now (see lib/s3.ts) - attachments are
+// temporarily stored on local disk under `backend/attachment` instead.
+// File bytes are uploaded by the browser via a PUT to the URL returned by
+// `presign` below (which now points at our own `/uploads` route rather than
+// a presigned S3 URL) - they still don't pass through this API's normal
+// JSON body handling. Once the upload succeeds client-side, `create` is
+// called to record the resulting object's metadata against the ticket.
 export const attachmentController = {
   // POST /tickets/:ticketId/attachments/presign  { fileName, fileType, fileSize }
-  // Returns a short-lived S3 PUT URL the browser can upload straight to,
-  // plus the public fileUrl to record afterwards. Only xlsx/pdf/image
-  // files under 20MB are accepted.
+  // Returns a URL the browser can PUT the file bytes straight to (local
+  // stand-in for a presigned S3 PUT URL), plus the fileUrl to record
+  // afterwards. Only xlsx/pdf/image files under 20MB are accepted.
   async presign(req: AuthedRequest, res: Response) {
     const { fileName, fileType, fileSize } = presignAttachmentSchema.parse(req.body);
 
@@ -33,16 +36,16 @@ export const attachmentController = {
       throw new AppError("File exceeds the 20MB limit", 400);
     }
 
-    const key = buildAttachmentKey(req.user!.companyId, req.params.ticketId, fileName);
+    const key = buildAttachmentKey(req.params.ticketId, fileName);
     const { uploadUrl, fileUrl } = await createPresignedUploadUrl(key, fileType, fileSize);
 
     res.json({ uploadUrl, fileUrl, key, fileName });
   },
 
   // POST /tickets/:ticketId/attachments  { fileName, fileUrl }
-  // Called after the browser has already PUT the file to S3 using the
-  // presigned URL from `presign`. Rejects fileUrls that don't point at
-  // our own bucket so this can't be used to link out to arbitrary URLs.
+  // Called after the browser has already PUT the file using the uploadUrl
+  // from `presign`. Rejects fileUrls that don't point at our own local
+  // `/uploads` storage so this can't be used to link out to arbitrary URLs.
   async create(req: AuthedRequest, res: Response) {
     const { fileName, fileUrl } = req.body;
     if (!fileName || !fileUrl) {
