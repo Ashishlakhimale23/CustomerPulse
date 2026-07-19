@@ -134,3 +134,14 @@ export function resolveLocalAttachmentPath(key: string) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   return filePath;
 }
+
+/**
+ * Recovers the storage key from a fileUrl produced by `getPublicFileUrl`,
+ * so a stored attachment can be located on disk again later (e.g. to
+ * delete it). Returns null if the URL isn't one of ours.
+ */
+export function keyFromLocalFileUrl(fileUrl: string): string | null {
+  const prefix = `${LOCAL_BASE_URL}/uploads/`;
+  if (!fileUrl.startsWith(prefix)) return null;
+  return fileUrl.slice(prefix.length);
+}
