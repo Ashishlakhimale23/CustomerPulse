@@ -37,7 +37,7 @@ export const clientController = {
 
     async createClient(req: AuthedRequest, res: Response) {
         try {
-            const { name, isKeyClient, projects } = req.body;
+            const { name, isKeyClient, isWindClient, projects } = req.body;
 
             if (!name || !name.trim()) {
                 return res.status(400).json({
@@ -69,6 +69,7 @@ export const clientController = {
                 data: {
                     name: name.trim().toUpperCase(),
                     isKeyClient: Boolean(isKeyClient),
+                    isWindClient: Boolean(isWindClient),
                     projects: {
                         create: projectNames.map((p) => ({
                             name: p.name.trim().toUpperCase(),
@@ -98,7 +99,7 @@ export const clientController = {
     async updateClient(req: AuthedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const { name, isKeyClient } = req.body;
+            const { name, isKeyClient, isWindClient } = req.body;
 
             if (!name || !name.trim()) {
                 return res.status(400).json({
@@ -120,6 +121,7 @@ export const clientController = {
                 data: {
                     name: name.trim().toUpperCase(),
                     ...(isKeyClient !== undefined ? { isKeyClient: Boolean(isKeyClient) } : {}),
+                    ...(isWindClient !== undefined ? { isWindClient: Boolean(isWindClient) } : {}),
                 },
                 include: { projects: true },
             });
