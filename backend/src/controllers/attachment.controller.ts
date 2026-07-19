@@ -5,6 +5,7 @@ import { prisma } from "../lib/database";
 import { AppError } from "../middleware/errorHandler";
 import { presignAttachmentSchema } from "../utils/schemas";
 import { isStaff } from "../utils/rbac";
+import { TicketComment } from "../generated/prisma/client";
 import {
   buildAttachmentKey,
   createPresignedUploadUrl,
@@ -22,6 +23,23 @@ import {
 // a presigned S3 URL) - they still don't pass through this API's normal
 // JSON body handling. Once the upload succeeds client-side, `create` is
 // called to record the resulting object's metadata against the ticket.
+
+const DEFAULT_ATTACHMENT_COMMENT_PREFIX = "Attached: ";
+
+/**
+ * Flags a comment's text as referring to a now-deleted attachment. No
+ * schema change - this just rewrites commentText itself. If the comment
+ * was the auto-generated "Attached: <file>" note, it's replaced outright;
+ * if the user had typed their own comment, their text is kept and a
+ * "[Attachment deleted]" note is appended instead.
+ */
+function markCommentAttachmentDeleted(commentText: string, fileName: string): string {
+  if (commentText === `${DEFAULT_ATTACHMENT_COMMENT_PREFIX}${fileName}`) {
+    return `[Attachment deleted] ${fileName}`;
+  }
+  return `${commentText}\n\n[Attachment deleted: ${fileName}]`;
+}
+
 export const attachmentController = {
   // POST /tickets/:ticketId/attachments/presign  { fileName, fileType, fileSize }
   // Returns a URL the browser can PUT the file bytes straight to (local
@@ -82,7 +100,7 @@ export const attachmentController = {
       data: {
         ticketId: req.params.ticketId,
         userId: req.user!.id,
-        commentText: trimmedComment || `Attached: ${fileName}`,
+        commentText: trimmedComment || `${DEFAULT_ATTACHMENT_COMMENT_PREFIX}${fileName}`,
         attachmentId: attachment.id,
       },
       include: { user: true, attachment: true },
@@ -93,9 +111,11 @@ export const attachmentController = {
 
   // DELETE /tickets/:ticketId/attachments/:attachmentId
   // Removes an attachment's DB record and its file on local disk. Only the
-  // person who uploaded it, or staff, may remove it. The linked comment (if
-  // any) is kept - its attachmentId just gets cleared (see schema.prisma) -
-  // so the activity thread doesn't lose the note that a file was shared.
+  // person who uploaded it, or staff, may remove it. Any comment(s) linked
+  // to this attachment are flagged as referring to a deleted attachment by
+  // rewriting their commentText (no schema change) - the attachmentId link
+  // itself then just clears automatically (onDelete: SetNull) once the
+  // attachment row is deleted below.
   async remove(req: AuthedRequest, res: Response) {
     const attachment = await prisma.ticketAttachment.findUniqueOrThrow({
       where: { id: req.params.attachmentId },
@@ -106,6 +126,18 @@ export const attachmentController = {
     if (attachment.uploadedBy !== req.user!.id && !isStaff(req.user!.role)) {
       throw new AppError("You do not have permission to remove this attachment", 403);
     }
+
+    const linkedComments = await prisma.ticketComment.findMany({
+      where: { attachmentId: attachment.id },
+    });
+    await Promise.all(
+      linkedComments.map((c: TicketComment) =>
+        prisma.ticketComment.update({
+          where: { id: c.id },
+          data: { commentText: markCommentAttachmentDeleted(c.commentText, attachment.fileName) },
+        })
+      )
+    );
 
     await prisma.ticketAttachment.delete({ where: { id: attachment.id } });
 
