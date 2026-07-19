@@ -19,6 +19,7 @@ import {
 import { Ticket, Comment, Attachment, Escalation, Keyword, User as UserType, TicketStatus, TicketPriority, SupportLevel, TicketStatusHistory, PAGES, UserRole,ROLES } from "../types";
 import { userInfo } from "os";
 import AttachmentUploader from "./AttachmentUploader";
+import { deleteAttachment } from "../libs/attachmentUpload";
 interface metric {
         openTickets : number
         assignedTickets : number,
@@ -179,6 +180,19 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
       // Refresh comments
       fetchTicketDetails();
       setSuccess("Comment posted successfully.");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // Action: Remove Attachment
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    setError("");
+    setSuccess("");
+    try {
+      await deleteAttachment(ticketId, attachmentId, token);
+      fetchTicketDetails();
+      setSuccess("Attachment removed.");
     } catch (err: any) {
       setError(err.message);
     }
@@ -801,6 +815,17 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                       <span>{new Date(comment.createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-zinc-800 whitespace-pre-wrap">{comment.commentText}</p>
+                    {comment.attachment && (
+                      <a
+                        href={comment.attachment.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-mono font-medium text-[#032d26] bg-zinc-50 border border-zinc-200 px-2 py-1 hover:underline"
+                      >
+                        <Paperclip size={12} />
+                        {comment.attachment.fileName}
+                      </a>
+                    )}
                     {comment.isInternal && (
                       <span className="inline-block mt-2 text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 font-mono border border-amber-200">
                         Internal Work Note - Hidden from Requesters
@@ -826,6 +851,7 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                 ticketId={ticketId}
                 disabled={["RESOLVED", "CLOSED"].includes(ticket.status)}
                 disabledMessage={`Adding attachments is disabled as this ticket is now ${ticket.status}.`}
+                allowComment
                 onUploaded={() => {
                   fetchTicketDetails();
                   setSuccess("Attachment uploaded successfully.");
@@ -838,23 +864,39 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
               <p className="text-zinc-400 italic text-xs text-center py-2">No attachments linked to this ticket.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {attachments.map((a) => (
-                  <div key={a.id} className="flex justify-between items-center p-2.5 bg-zinc-50 border border-zinc-200">
-                    <div className="overflow-hidden">
-                      <a
-                        href={a.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-mono font-medium text-[#032d26] hover:underline block truncate"
-                      >
-                        {a.fileName}
-                      </a>
-                      <span className="text-[10px] text-zinc-400 font-mono block mt-0.5">
-                        Uploaded by: {a.uploaderName}
-                      </span>
+                {attachments.map((a) => {
+                  const canRemove =
+                    !["RESOLVED", "CLOSED"].includes(ticket.status) &&
+                    (a.uploadedBy === currentUser.id ||
+                      [ROLES.CXO, ROLES.HOD, ROLES.GLOBAL_ADMIN, ROLES.AGENT].includes(currentUser.role));
+                  return (
+                    <div key={a.id} className="flex justify-between items-center gap-2 p-2.5 bg-zinc-50 border border-zinc-200">
+                      <div className="overflow-hidden">
+                        <a
+                          href={a.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-mono font-medium text-[#032d26] hover:underline block truncate"
+                        >
+                          {a.fileName}
+                        </a>
+                        <span className="text-[10px] text-zinc-400 font-mono block mt-0.5">
+                          Uploaded by: {a.uploaderName}
+                        </span>
+                      </div>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAttachment(a.id)}
+                          className="text-zinc-400 hover:text-red-500 shrink-0"
+                          title="Remove attachment"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
