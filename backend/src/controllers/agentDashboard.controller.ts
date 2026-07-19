@@ -45,6 +45,22 @@ function buildSegments(
   }));
 }
 
+/**
+ * Linear-interpolation percentile (matches the common "exclusive" method
+ * used by most stats libraries / Excel's PERCENTILE.INC). `sorted` must
+ * already be ascending.
+ */
+function percentile(sorted: number[], p: number): number | null {
+  if (sorted.length === 0) return null;
+  if (sorted.length === 1) return sorted[0];
+  const idx = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const frac = idx - lo;
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
+}
+
 export const agentDashboardController = {
   // GET /agent-dashboard/analytics
   // Single lean payload for the agent's personal analytics console
@@ -78,7 +94,7 @@ export const agentDashboardController = {
 
     const departmentId = agent.agentsdepartmentId;
 
-    const [categories, tickets, deptOpenCount, deptBreachedCount, deptTotalCount] = await Promise.all([
+    const [categories, tickets, deptOpenCount, deptBreachedCount, deptTotalCount, deptResolvedTats] = await Promise.all([
       departmentId
         ? prisma.ticketCategory.findMany({
             where: { departmentId },
@@ -120,6 +136,15 @@ export const agentDashboardController = {
         ? prisma.ticket.count({ where: { departmentId, slaBreached: true } })
         : Promise.resolve(0),
       departmentId ? prisma.ticket.count({ where: { departmentId } }) : Promise.resolve(0),
+      // Raw resolved turnaround times (seconds) across the whole department,
+      // any assignee. Feeds both the average baseline and the percentile
+      // target below — one query instead of two.
+      departmentId
+        ? prisma.ticket.findMany({
+            where: { departmentId, status: TicketStatus.RESOLVED, turnOverTime: { not: null } },
+            select: { turnOverTime: true },
+          })
+        : Promise.resolve([] as { turnOverTime: number | null }[]),
     ]);
 
     const now = new Date();
@@ -149,17 +174,29 @@ export const agentDashboardController = {
       };
     });
 
-    // Department TAT baseline — average turnOverTime (seconds -> hours)
-    // across every resolved ticket in the department (any assignee), so
-    // "You vs. department" has something to compare the agent against.
-    let departmentAvgTatHours: number | null = null;
-    if (departmentId) {
-      const agg = await prisma.ticket.aggregate({
-        where: { departmentId, status: TicketStatus.RESOLVED, turnOverTime: { not: null } },
-        _avg: { turnOverTime: true },
-      });
-      departmentAvgTatHours = agg._avg.turnOverTime != null ? Number((agg._avg.turnOverTime / 3600).toFixed(1)) : null;
-    }
+    // Department TAT baseline + target — both derived from the department's
+    // actual resolved-ticket turnaround distribution (any assignee), not a
+    // hardcoded constant:
+    //  - departmentAvgTatHours: the mean, for "You vs. department".
+    //  - departmentTargetTatHours: the 25th percentile — i.e. as fast as the
+    //    fastest quarter of real resolutions in the department. A concrete,
+    //    achievable-but-aspirational goal grounded in what the team has
+    //    actually done, rather than a guessed number. Requires at least 5
+    //    resolved tickets with a recorded turnaround before we trust it;
+    //    below that a percentile is too noisy to call a "target".
+    const resolvedTatHours = deptResolvedTats
+      .map((t) => t.turnOverTime)
+      .filter((v): v is number => v != null)
+      .map((seconds) => seconds / 3600)
+      .sort((a, b) => a - b);
+
+    const departmentAvgTatHours =
+      resolvedTatHours.length > 0
+        ? Number((resolvedTatHours.reduce((s, v) => s + v, 0) / resolvedTatHours.length).toFixed(1))
+        : null;
+
+    const departmentTargetTatHours =
+      resolvedTatHours.length >= 5 ? Number((percentile(resolvedTatHours, 25) as number).toFixed(1)) : null;
 
     // Real "Department snapshot" numbers — no more client-side guessed
     // multipliers off the agent's own stats. All null/0 when the agent
@@ -185,6 +222,7 @@ export const agentDashboardController = {
       categories,
       tickets: ticketDTOs,
       departmentAvgTatHours,
+      departmentTargetTatHours,
     });
   },
 };
