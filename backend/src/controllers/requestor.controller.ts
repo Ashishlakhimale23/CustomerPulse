@@ -2,7 +2,8 @@ import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
 import { prisma } from "../lib/database";
 import { AppError } from "../middleware/errorHandler";
-import { UserRole } from "../generated/prisma/client";
+import { UserRole, SupportLevel } from "../generated/prisma/client";
+import { invitationService, InvitationError } from "../services/invitation.service";
 
 export const requestorController = {
   // GET /admin/requestors
@@ -126,5 +127,69 @@ export const requestorController = {
     });
 
     res.status(201).json(adminMessage);
+  },
+
+  // POST /admin/requestors/bulk-invite  { requestors: [{ name, email }, ...] }
+  // Bulk version of the existing single "Onboard Staff Member -> REQUESTER"
+  // invite flow (see invitationController.create / invitationService).
+  // Only ever creates REQUESTER invitations - agent/HOD/CXO/manager invite
+  // logic is untouched. Rows whose email already belongs to a user, or
+  // already has a pending invitation, are skipped rather than failing the
+  // whole batch.
+  async bulkInvite(req: AuthedRequest, res: Response) {
+    const rows = req.body.requestors;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new AppError("No requestor rows were provided", 400);
+    }
+
+    const created: string[] = [];
+    const skipped: { name: string; email: string; reason: string }[] = [];
+
+    // De-dupe within the uploaded file itself, so two rows with the same
+    // email in one sheet don't both attempt an insert.
+    const seenInFile = new Set<string>();
+
+    for (const raw of rows) {
+      const name = typeof raw?.name === "string" ? raw.name.trim() : "";
+      const email = typeof raw?.email === "string" ? raw.email.trim().toLowerCase() : "";
+
+      if (!name || !email) {
+        skipped.push({ name, email, reason: "Missing name or email" });
+        continue;
+      }
+
+      if (seenInFile.has(email)) {
+        skipped.push({ name, email, reason: "Duplicate row in uploaded file" });
+        continue;
+      }
+      seenInFile.add(email);
+
+      try {
+        await invitationService.createInvitation({
+          inviter: { id: req.user!.id, role: req.user!.role },
+          email,
+          role: UserRole.REQUESTER,
+          name,
+          state: "",
+          windCategory: null,
+          departmentId: "",
+          departmentIds: [],
+          categoryIds: [],
+          supportLevel: SupportLevel.L2,
+        });
+        created.push(email);
+      } catch (err) {
+        const reason = err instanceof InvitationError ? err.message : "Requestor already exists or could not be invited";
+        skipped.push({ name, email, reason });
+      }
+    }
+
+    res.status(200).json({
+      totalRows: rows.length,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped,
+    });
   },
 };

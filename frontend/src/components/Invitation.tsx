@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Department, Invitation as InvitationType, SupportLevel, UserRole, TicketCategory, WindCategory } from "../types";
+import { Upload, FileDown, FileUp } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface InvitationComponentProps {
   setInviteDeptId: React.Dispatch<React.SetStateAction<string>>;
@@ -53,6 +55,19 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
   const [selectedState, setSelectedState] = useState<string>("");
   const [selectedWindCategory, setSelectedWindCategory] = useState<WindCategory | "">("");
   const isExecutiveRole = inviteRole === UserRole.HOD || inviteRole === UserRole.CXO;
+
+  // Bulk upload (Excel template download / bulk invite) state - reuses
+  // whichever Role/Department/Category/State/WindCategory is currently
+  // selected in the form above; only Name+Email vary per row.
+  const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{
+    totalRows: number;
+    createdCount: number;
+    skippedCount: number;
+    skipped: { name: string; email: string; reason: string }[];
+  } | null>(null);
+  const bulkFileInputRef = useRef<HTMLInputElement | null>(null);
 
 
 
@@ -183,6 +198,116 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
         fetchInvitations();
       }
     } catch (err) {}
+  };
+
+  // Same field checks as handleSendInvite, reused so a bulk batch can't be
+  // fired off with an incomplete Role/Department/Category selection.
+  const validateCommonFields = (): string | null => {
+    if (inviteRole != UserRole.REQUESTER && !isExecutiveRole && inviteCategoryIds.length <= 0) {
+      return "Select at least a single category";
+    }
+    if (isExecutiveRole && inviteDeptIds.length <= 0) {
+      return "Select at least one department for HOD / CXO";
+    }
+    if (inviteRole == UserRole.AGENT && !selectedWindCategory) {
+      return "Select Wind, Non-Wind, or Both for this agent";
+    }
+    return null;
+  };
+
+  const handleDownloadBulkTemplate = () => {
+    setShowBulkMenu(false);
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ["Name", "Email"],
+      ["Jane Doe", "jane.doe@example.com"],
+    ]);
+    worksheet["!cols"] = [{ wch: 28 }, { wch: 32 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Invitees");
+    XLSX.writeFile(workbook, `${inviteRole.toLowerCase()}_bulk_invite_template.xlsx`);
+  };
+
+  const handleBulkUploadClick = () => {
+    const validationError = validateCommonFields();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setShowBulkMenu(false);
+    bulkFileInputRef.current?.click();
+  };
+
+  const handleBulkFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setError("");
+    setSuccess("");
+    setBulkResult(null);
+
+    const validationError = validateCommonFields();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      // Accept "Name"/"name" and "Email"/"email" header variants.
+      const requestorsPayload = rows
+        .map((row) => {
+          const keyMap = Object.keys(row).reduce((acc, k) => {
+            acc[k.trim().toLowerCase()] = row[k];
+            return acc;
+          }, {} as Record<string, any>);
+          return {
+            name: String(keyMap["name"] ?? "").trim(),
+            email: String(keyMap["email"] ?? "").trim(),
+          };
+        })
+        .filter((r) => r.name || r.email);
+
+      if (requestorsPayload.length === 0) {
+        setError("No rows found in the uploaded file. Use the template and fill in Name + Email.");
+        return;
+      }
+
+      const payload = {
+        role: inviteRole,
+        requestors: requestorsPayload,
+        departmentId: !isExecutiveRole ? (inviteDeptId || null) : null,
+        departmentIds: isExecutiveRole ? inviteDeptIds : [],
+        categoryIds: !isExecutiveRole ? inviteCategoryIds : [],
+        supportLevel: inviteRole == UserRole.AGENT ? SupportLevel.L1 : SupportLevel.L2,
+        state: inviteRole === UserRole.AGENT && selectedState ? selectedState : null,
+        windCategory: inviteRole === UserRole.AGENT && selectedWindCategory ? selectedWindCategory : null,
+      };
+
+      setBulkUploading(true);
+      const res = await requestFn("http://localhost:3000/invitations/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Bulk invite failed");
+
+      setBulkResult(data);
+      setSuccess(`Bulk invite complete: ${data.createdCount} invited, ${data.skippedCount} skipped.`);
+      fetchInvitations();
+    } catch (err: any) {
+      setError(err.message || "Failed to process the uploaded file");
+    } finally {
+      setBulkUploading(false);
+    }
   };
 
   return (
@@ -470,6 +595,85 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
               Issue Invitation
             </button>
           </form>
+
+          <div className="mt-4 pt-4 border-t border-zinc-100">
+            <p className="text-[11px] text-zinc-500 mb-2">
+              Or invite many people at once with this same Role{!isExecutiveRole && inviteRole !== UserRole.REQUESTER ? " / Department / Category" : isExecutiveRole ? " / Department" : ""} setting:
+            </p>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowBulkMenu((v) => !v)}
+                disabled={bulkUploading}
+                className="w-full flex items-center justify-center gap-1.5 border border-zinc-300 text-zinc-700 text-xs font-semibold py-2.5 hover:bg-zinc-50 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                <Upload size={14} />
+                {bulkUploading ? "Uploading..." : `Bulk Upload (${inviteRole})`}
+              </button>
+              {showBulkMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowBulkMenu(false)} />
+                  <div className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 shadow-lg z-20 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={handleDownloadBulkTemplate}
+                      className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-zinc-50 cursor-pointer border-b border-zinc-100"
+                    >
+                      <FileDown size={16} className="text-zinc-500 mt-0.5" />
+                      <span>
+                        <span className="block text-xs font-semibold text-zinc-900">Download template</span>
+                        <span className="block text-[11px] text-zinc-500">Excel file with Name + Email columns</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkUploadClick}
+                      className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-zinc-50 cursor-pointer"
+                    >
+                      <FileUp size={16} className="text-zinc-500 mt-0.5" />
+                      <span>
+                        <span className="block text-xs font-semibold text-zinc-900">Bulk upload &amp; invite</span>
+                        <span className="block text-[11px] text-zinc-500">Sends a {inviteRole} invite to every row</span>
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+              <input
+                ref={bulkFileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleBulkFileSelected}
+              />
+            </div>
+
+            {bulkResult && (
+              <div className="mt-3 border border-zinc-200 text-xs">
+                <div className="flex justify-between items-center px-3 py-2 bg-zinc-50 border-b border-zinc-200">
+                  <span className="font-semibold text-zinc-800">
+                    {bulkResult.createdCount} invited &middot; {bulkResult.skippedCount} skipped of {bulkResult.totalRows}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBulkResult(null)}
+                    className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                {bulkResult.skipped.length > 0 && (
+                  <ul className="max-h-40 overflow-y-auto divide-y divide-zinc-100">
+                    {bulkResult.skipped.map((s, i) => (
+                      <li key={`${s.email}-${i}`} className="px-3 py-1.5 text-zinc-600">
+                        <span className="font-mono">{s.email || "—"}</span>: {s.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

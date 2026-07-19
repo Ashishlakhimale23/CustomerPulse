@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { AuthedRequest } from "../middleware/auth";
-import { invitationService } from "../services/invitation.service";
+import { invitationService, InvitationError } from "../services/invitation.service";
 import { prisma } from "../lib/database";
 
 // No try/catch needed here - routes wrap these in asyncHandler, and
@@ -43,6 +43,85 @@ export const invitationController = {
 
     }
 
+  },
+
+  // POST /invitations/bulk  (GLOBAL_ADMIN, DEPT_ADMIN)
+  // Bulk version of `create` above - same role/department/category/state/
+  // windCategory settings are applied to every row (exactly what the
+  // "Onboard Staff Member" form already collects once), only the name+email
+  // pairs vary per row. Reuses invitationService.createInvitation per row,
+  // so validation, password pre-set, and the invite email are identical to
+  // a single invite. Does not touch `create`/`accept` at all.
+  async bulkCreate(req: AuthedRequest, res: Response) {
+    const inviter = req.user;
+    if (!inviter) {
+      return res.status(401).json({ message: "no inviter found" });
+    }
+
+    const {
+      role,
+      requestors,
+      state,
+      windCategory,
+      departmentId,
+      departmentIds,
+      categoryIds,
+      supportLevel,
+    } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ message: "role is required" });
+    }
+    if (!Array.isArray(requestors) || requestors.length === 0) {
+      return res.status(400).json({ message: "No rows were provided" });
+    }
+
+    const created: string[] = [];
+    const skipped: { name: string; email: string; reason: string }[] = [];
+    const seenInFile = new Set<string>();
+
+    for (const raw of requestors) {
+      const name = typeof raw?.name === "string" ? raw.name.trim() : "";
+      const email = typeof raw?.email === "string" ? raw.email.trim().toLowerCase() : "";
+
+      if (!name || !email) {
+        skipped.push({ name, email, reason: "Missing name or email" });
+        continue;
+      }
+      if (seenInFile.has(email)) {
+        skipped.push({ name, email, reason: "Duplicate row in uploaded file" });
+        continue;
+      }
+      seenInFile.add(email);
+
+      try {
+        await invitationService.createInvitation({
+          inviter: { id: inviter.id, role: inviter.role },
+          email,
+          role,
+          name,
+          state: role === "AGENT" ? (state || "") : "",
+          windCategory: role === "AGENT" ? (windCategory || null) : null,
+          departmentId: departmentId || "",
+          departmentIds: departmentIds || [],
+          categoryIds: categoryIds || [],
+          supportLevel,
+        });
+        created.push(email);
+      } catch (err) {
+        //@ts-ignore
+        const reason = err instanceof InvitationError ? err.message : (err?.message || "Could not invite this row");
+        skipped.push({ name, email, reason });
+      }
+    }
+
+    return res.status(200).json({
+      totalRows: requestors.length,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped,
+    });
   },
 
   // POST /invitations/accept  (public - invitee lands here from the emailed link)

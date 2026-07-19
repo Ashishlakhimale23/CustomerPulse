@@ -8,6 +8,7 @@ export const requestorRouter = Router();
 requestorRouter.use(requireAuth, requireRole(UserRole.GLOBAL_ADMIN));
 
 requestorRouter.get("/", requestorController.list);
+requestorRouter.post("/bulk-invite", requestorController.bulkInvite);
 requestorRouter.post("/:id/approve", requestorController.approve);
 requestorRouter.post("/:id/reject", requestorController.reject);
 requestorRouter.post("/:id/block", requestorController.block);
