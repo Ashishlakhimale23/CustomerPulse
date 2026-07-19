@@ -30,6 +30,11 @@ interface AttachmentUploaderProps {
   onStagedFilesChange?: (files: File[]) => void;
   onUploaded?: (attachment: Attachment) => void;
   compact?: boolean;
+  // When true (and ticketId is set), shows a "Comment (optional)" box above
+  // the dropzone. Whatever's typed there is posted as a comment alongside
+  // the attachment; if left blank, the API posts a comment naming the file
+  // instead, so every upload still shows up in the activity thread.
+  allowComment?: boolean;
 }
 
 // Drag-and-drop + click-to-browse picker for ticket attachments (xlsx,
@@ -45,10 +50,12 @@ export default function AttachmentUploader({
   onStagedFilesChange,
   onUploaded,
   compact,
+  allowComment,
 }: AttachmentUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [commentDraft, setCommentDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = (fileList: FileList | null) => {
@@ -66,6 +73,7 @@ export default function AttachmentUploader({
     if (valid.length === 0) return;
 
     if (ticketId) {
+      const commentForThisBatch = commentDraft;
       const items: QueueItem[] = valid.map((f) => ({
         id: `${f.name}-${f.size}-${Date.now()}-${Math.random()}`,
         file: f,
@@ -73,10 +81,17 @@ export default function AttachmentUploader({
         progress: 0,
       }));
       setQueue((prev) => [...prev, ...items]);
+      setCommentDraft("");
       items.forEach((item) => {
-        uploadAttachmentToS3(item.file, ticketId, token, (pct) => {
-          setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, progress: pct } : q)));
-        })
+        uploadAttachmentToS3(
+          item.file,
+          ticketId,
+          token,
+          (pct) => {
+            setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, progress: pct } : q)));
+          },
+          commentForThisBatch
+        )
           .then((attachment) => {
             setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "done", progress: 100 } : q)));
             onUploaded?.(attachment);
@@ -109,6 +124,15 @@ export default function AttachmentUploader({
 
   return (
     <div>
+      {allowComment && ticketId && (
+        <textarea
+          value={commentDraft}
+          onChange={(e) => setCommentDraft(e.target.value)}
+          placeholder="Comment (optional) - shown alongside the file(s) you attach below"
+          rows={2}
+          className="w-full mb-2 text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+        />
+      )}
       <div
         onDragOver={(e) => {
           e.preventDefault();
