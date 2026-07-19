@@ -108,6 +108,7 @@ export const invitationService = {
     }
 
     await notificationService.sendInvitation(email, invitation.token, role, password);
+    console.log(invitation)
     return invitation;
   },
 

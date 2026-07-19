@@ -37,6 +37,7 @@ export const invitationController = {
       });
 
     } catch (error) {
+      console.log(error)
       //@ts-ignore
       return res.status(401).json(error.message)
 

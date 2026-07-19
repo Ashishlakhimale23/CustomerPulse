@@ -23,6 +23,7 @@ export const cxoDashboardController = {
   // departments — the frontend does all range/status/site/client filtering
   // and chart aggregation client-side over this set, same shape the mock
   // data generator used to produce locally.
+  //@ts-ignore
   async getAnalytics(req: AuthedRequest, res: Response) {
     const cxoId = req.user!.id;
 

@@ -1361,7 +1361,7 @@ export default function App() {
               </button>
             ) : null}
 
-            {isManager ? (
+            {isAdmin ? (
               <button
                 onClick={() => setCurrentView(PAGES.HOD_ANALYTICS)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
@@ -1536,7 +1536,7 @@ export default function App() {
           {/* AGENT ANAYLTICS*/}
           {
             currentView == PAGES.CXO_ANALYTICS && (
-              <CXODashboardMock/>
+              <CXODashboardMock token={token}/>
 
             )
           }
