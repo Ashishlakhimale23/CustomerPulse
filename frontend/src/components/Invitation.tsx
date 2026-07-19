@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Department, Invitation as InvitationType, SupportLevel, UserRole, TicketCategory } from "../types";
+import { Department, Invitation as InvitationType, SupportLevel, UserRole, TicketCategory, WindCategory } from "../types";
 
 interface InvitationComponentProps {
   setInviteDeptId: React.Dispatch<React.SetStateAction<string>>;
@@ -51,6 +51,7 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
   const [inviteDeptIds, setInviteDeptIds] = useState<string[]>([]);
 
   const [selectedState, setSelectedState] = useState<string>("");
+  const [selectedWindCategory, setSelectedWindCategory] = useState<WindCategory | "">("");
   const isExecutiveRole = inviteRole === UserRole.HOD || inviteRole === UserRole.CXO;
 
 
@@ -60,6 +61,7 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
 
     if (newRole !== UserRole.AGENT) {
       setSelectedState("");
+      setSelectedWindCategory("");
     }
 
     // Reset category/department selections appropriately when switching roles
@@ -108,6 +110,11 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
         return;
       }
 
+      if (inviteRole == UserRole.AGENT && !selectedWindCategory) {
+        setError("Select Wind, Non-Wind, or Both for this agent");
+        return;
+      }
+
       const payload = {
         name: name,
         email: inviteEmail,
@@ -119,6 +126,10 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
         state:
           inviteRole === UserRole.AGENT && selectedState
             ? selectedState
+            : null,
+        windCategory:
+          inviteRole === UserRole.AGENT && selectedWindCategory
+            ? selectedWindCategory
             : null,
 
       };
@@ -139,6 +150,7 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
       setInviteEmail("");
       setInviteCategoryIds([]);
       setSelectedState("");
+      setSelectedWindCategory("");
       setInviteDeptIds([]);
       setInviteDeptId("");
       fetchInvitations();
@@ -326,6 +338,26 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
                       {state}
                     </option>
                   ))}
+                </select>
+              </div>
+            )}
+
+            {/* Wind Category (Required - AGENT only): which turbine business this agent covers */}
+            {inviteRole === UserRole.AGENT && (
+              <div>
+                <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                  Wind Category
+                </label>
+                <select
+                  value={selectedWindCategory}
+                  onChange={(e) => setSelectedWindCategory(e.target.value as WindCategory | "")}
+                  className="w-full text-xs p-2.5 border border-zinc-300 bg-white"
+                  required
+                >
+                  <option value="">-- Select Wind Category --</option>
+                  <option value={WindCategory.WIND}>Wind</option>
+                  <option value={WindCategory.NON_WIND}>Non-Wind</option>
+                  <option value={WindCategory.BOTH}>Both</option>
                 </select>
               </div>
             )}
