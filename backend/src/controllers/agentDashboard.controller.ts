@@ -63,7 +63,14 @@ export const agentDashboardController = {
         id: true,
         fullName: true,
         agentsdepartmentId: true,
-        assignedDepartment: { select: { id: true, name: true } },
+        assignedDepartment: {
+          select: {
+            id: true,
+            name: true,
+            manager: { select: { fullName: true } },
+            _count: { select: { agents: true } },
+          },
+        },
       },
     });
 
@@ -71,7 +78,7 @@ export const agentDashboardController = {
 
     const departmentId = agent.agentsdepartmentId;
 
-    const [categories, tickets] = await Promise.all([
+    const [categories, tickets, deptOpenCount, deptBreachedCount, deptTotalCount] = await Promise.all([
       departmentId
         ? prisma.ticketCategory.findMany({
             where: { departmentId },
@@ -103,6 +110,16 @@ export const agentDashboardController = {
         orderBy: { createdAt: "desc" },
         take: 500,
       }),
+      // Department-wide counts (all agents, not just the signed-in one) —
+      // real numbers for the "You vs. department" / "Department snapshot"
+      // cards, replacing what used to be client-side fabricated multipliers.
+      departmentId
+        ? prisma.ticket.count({ where: { departmentId, status: { not: TicketStatus.RESOLVED } } })
+        : Promise.resolve(0),
+      departmentId
+        ? prisma.ticket.count({ where: { departmentId, slaBreached: true } })
+        : Promise.resolve(0),
+      departmentId ? prisma.ticket.count({ where: { departmentId } }) : Promise.resolve(0),
     ]);
 
     const now = new Date();
@@ -144,9 +161,27 @@ export const agentDashboardController = {
       departmentAvgTatHours = agg._avg.turnOverTime != null ? Number((agg._avg.turnOverTime / 3600).toFixed(1)) : null;
     }
 
+    // Real "Department snapshot" numbers — no more client-side guessed
+    // multipliers off the agent's own stats. All null/0 when the agent
+    // isn't assigned to a department yet.
+    const agentOpenCount = ticketDTOs.filter((t) => t.status !== "RESOLVED").length;
+    const departmentSnapshot = departmentId
+      ? {
+          departmentName: agent.assignedDepartment?.name ?? null,
+          managerName: agent.assignedDepartment?.manager?.fullName ?? null,
+          agentCount: agent.assignedDepartment?._count.agents ?? 0,
+          openTickets: deptOpenCount,
+          breachedTickets: deptBreachedCount,
+          totalTickets: deptTotalCount,
+          compliancePct: deptTotalCount ? Math.round(((deptTotalCount - deptBreachedCount) / deptTotalCount) * 100) : 100,
+          yourOpenSharePct: deptOpenCount ? Math.round((agentOpenCount / deptOpenCount) * 100) : 0,
+        }
+      : null;
+
     res.json({
       agent: { id: agent.id, fullName: agent.fullName },
-      department: agent.assignedDepartment,
+      department: agent.assignedDepartment ? { id: agent.assignedDepartment.id, name: agent.assignedDepartment.name } : null,
+      departmentSnapshot,
       categories,
       tickets: ticketDTOs,
       departmentAvgTatHours,
