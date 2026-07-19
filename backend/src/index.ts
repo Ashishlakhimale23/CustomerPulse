@@ -21,12 +21,16 @@ import { requestorRouter } from "./routes/requestors";
 import { notificationRouter } from "./routes/notifications";
 import { cxoRouter } from "./routes/cxoDashboard";
 import { agentDashboardRouter } from "./routes/agentDashboard";
+import { uploadsRouter } from "./routes/uploads";
 
 const app = express();
 
 // ---- global middleware, in order ----
 app.use(securityHeaders);
 app.use(corsMiddleware);
+// Mounted before express.json() so raw file bytes PUT here aren't parsed as JSON.
+// Temporary local-storage stand-in for direct-to-S3 uploads (see lib/s3.ts).
+app.use("/uploads", uploadsRouter);
 app.use(express.json());
 app.use(requestLogger);
 
