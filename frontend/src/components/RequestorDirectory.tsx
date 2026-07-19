@@ -1,8 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RequestorDirectoryEntry } from "../types";
-import { MessageSquare, ShieldCheck, ShieldX, Ban, CheckCircle2, Trash2 } from "lucide-react";
+import { MessageSquare, ShieldCheck, ShieldX, Ban, CheckCircle2, Trash2, Upload, FileDown, FileUp } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const API_BASE = "http://localhost:3000";
+
+type BulkInviteResult = {
+  totalRows: number;
+  createdCount: number;
+  skippedCount: number;
+  created: string[];
+  skipped: { name: string; email: string; reason: string }[];
+};
 
 export const RequestorDirectory = (
   { token, setError, setSuccess }: {
@@ -16,6 +25,12 @@ export const RequestorDirectory = (
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
   const [messagingId, setMessagingId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
+
+  // Bulk upload (Excel template download / bulk invite) state
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkInviteResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchRequestors = async () => {
     setLoading(true);
@@ -95,6 +110,81 @@ export const RequestorDirectory = (
     }
   };
 
+  // Downloads a blank Excel template the admin fills in with requestor
+  // names + emails, then re-uploads via "Bulk Upload".
+  const handleDownloadTemplate = () => {
+    setShowUploadMenu(false);
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ["Name", "Email"],
+      ["Jane Doe", "jane.doe@example.com"],
+    ]);
+    worksheet["!cols"] = [{ wch: 28 }, { wch: 32 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Requestors");
+    XLSX.writeFile(workbook, "requestor_bulk_invite_template.xlsx");
+  };
+
+  const handleUploadClick = () => {
+    setShowUploadMenu(false);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setError("");
+    setSuccess("");
+    setBulkResult(null);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      // Accept "Name"/"name" and "Email"/"email" header variants.
+      const requestorsPayload = rows
+        .map((row) => {
+          const keyMap = Object.keys(row).reduce((acc, k) => {
+            acc[k.trim().toLowerCase()] = row[k];
+            return acc;
+          }, {} as Record<string, any>);
+          return {
+            name: String(keyMap["name"] ?? "").trim(),
+            email: String(keyMap["email"] ?? "").trim(),
+          };
+        })
+        .filter((r) => r.name || r.email);
+
+      if (requestorsPayload.length === 0) {
+        setError("No rows found in the uploaded file. Use the template and fill in Name + Email.");
+        return;
+      }
+
+      setUploading(true);
+      const res = await fetch(`${API_BASE}/admin/requestors/bulk-invite`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ requestors: requestorsPayload })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || "Bulk invite failed");
+
+      setBulkResult(data);
+      setSuccess(`Bulk invite complete: ${data.createdCount} invited, ${data.skippedCount} skipped.`);
+      fetchRequestors();
+    } catch (err: any) {
+      setError(err.message || "Failed to process the uploaded file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const filtered = requestors.filter(r => filter === "ALL" ? true : r.approvalStatus === filter);
   const pendingCount = requestors.filter(r => r.approvalStatus === "PENDING").length;
 
@@ -107,14 +197,99 @@ export const RequestorDirectory = (
             Review self-registered requester accounts, approve or reject signups, and manage access.
           </p>
         </div>
-        {pendingCount > 0 && (
-          <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-3 py-1.5 rounded-full">
-            {pendingCount} pending approval
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {pendingCount > 0 && (
+            <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-3 py-1.5 rounded-full">
+              {pendingCount} pending approval
+            </span>
+          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowUploadMenu((v) => !v)}
+              disabled={uploading}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              <Upload size={14} />
+              {uploading ? "Uploading..." : "Upload"}
+            </button>
+            {showUploadMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 cursor-pointer border-b border-slate-100"
+                  >
+                    <FileDown size={16} className="text-slate-500 mt-0.5" />
+                    <span>
+                      <span className="block text-xs font-semibold text-slate-900">Download template</span>
+                      <span className="block text-[11px] text-slate-500">Excel file with Name + Email columns</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={handleUploadClick}
+                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 cursor-pointer"
+                  >
+                    <FileUp size={16} className="text-slate-500 mt-0.5" />
+                    <span>
+                      <span className="block text-xs font-semibold text-slate-900">Bulk upload &amp; invite</span>
+                      <span className="block text-[11px] text-slate-500">Upload the filled template to send invites</span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+          </div>
+        </div>
       </div>
 
-      
+      {bulkResult && (
+        <div className="bg-white border border-slate-200/80 shadow-xs rounded-2xl p-5 space-y-3">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Bulk invite results</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {bulkResult.createdCount} invited &middot; {bulkResult.skippedCount} skipped of {bulkResult.totalRows} rows
+              </p>
+            </div>
+            <button
+              onClick={() => setBulkResult(null)}
+              className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+          {bulkResult.skipped.length > 0 && (
+            <div className="border border-slate-100 rounded-lg overflow-hidden">
+              <table className="min-w-full text-xs">
+                <thead className="bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Name</th>
+                    <th className="px-4 py-2 text-left">Email</th>
+                    <th className="px-4 py-2 text-left">Reason skipped</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-600">
+                  {bulkResult.skipped.map((s, i) => (
+                    <tr key={`${s.email}-${i}`}>
+                      <td className="px-4 py-2">{s.name || "—"}</td>
+                      <td className="px-4 py-2 font-mono">{s.email || "—"}</td>
+                      <td className="px-4 py-2">{s.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
