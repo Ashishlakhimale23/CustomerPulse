@@ -1,4 +1,7 @@
 node_modules
+# Locally stored attachments (temporary stand-in for S3) - keep the folder, ignore its contents
+/attachment/*
+!/attachment/.gitkeep
 # Keep environment variables out of version control
 /generated/prisma 
 /src/generated 
