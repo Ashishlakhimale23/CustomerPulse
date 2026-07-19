@@ -240,6 +240,10 @@ export interface Comment {
     role : string,
   } 
   userRole?: string;
+  // Set when this comment was created alongside an attachment upload -
+  // lets the thread render the file inline next to the comment text.
+  attachmentId?: string | null;
+  attachment?: Attachment | null;
 }
 
 export interface Attachment {
