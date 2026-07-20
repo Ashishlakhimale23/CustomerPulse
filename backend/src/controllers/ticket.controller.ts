@@ -617,8 +617,6 @@ export const ticketController = {
       description,
       clientName,
       clientEmail,
-      representative,
-      employeeId,
       dateOfOccurance,
       site,
       state,
@@ -651,8 +649,6 @@ export const ticketController = {
       }
       data.clientEmail = clientEmail.trim();
     }
-    if (representative !== undefined) data.representative = representative;
-    if (employeeId !== undefined) data.employeeId = employeeId;
     if (dateOfOccurance !== undefined) {
       const parsed = new Date(dateOfOccurance);
       if (Number.isNaN(parsed.getTime())) throw new AppError("Invalid dateOfOccurance", 400);
