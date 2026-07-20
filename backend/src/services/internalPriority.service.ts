@@ -60,10 +60,15 @@ export const internalPriorityService = {
     const impactResultSum = selected.reduce((sum, f) => {
       const activePriorityMix = f.weight / selectedSumWeights;
       const impactResult = activePriorityMix * f.impactMultiplier;
+      console.log("activePriorityMix : ", f.weight ,"=", activePriorityMix)
+      console.log("impactResult : ",activePriorityMix," = ",impactResult)
+
       return sum + impactResult;
     }, 0);
 
     const finalScore = impactResultSum * severityScore;
+    console.log("severityScore = ",severityScore)
+    console.log("finalScore = ",finalScore)
 
     return {
       level: this.scoreToLevel(finalScore),

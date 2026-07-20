@@ -83,6 +83,82 @@ export const SanghviLogo = ({ className = "w-6 h-6" }: { className?: string }) =
 );
 
 
+// ====================== AUTH SHELL (public / unauthenticated frame) ======================
+// Shared "front door" layout for login, signup, forgot-password and invite-accept.
+// Left panel sells the product to whoever lands here — requester, agent, HOD or CXO.
+// Right panel hosts the actual form for whichever step the visitor is on.
+const AuthShell = ({ children }: { children: React.ReactNode }) => (
+  <div className="min-h-screen w-full flex bg-white font-sans">
+    <div className="hidden lg:flex lg:w-[44%] xl:w-[40%] relative flex-col justify-between bg-[#111214] text-white px-12 py-11 overflow-hidden">
+      {/* faint grid texture */}
+      <div
+        className="absolute inset-0 opacity-[0.05] pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
+          backgroundSize: "42px 42px",
+        }}
+      />
+      <div
+        className="absolute -top-24 -right-24 w-80 h-80 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(circle, rgba(225,53,42,0.25) 0%, rgba(225,53,42,0) 70%)" }}
+      />
+
+      <div className="relative z-10 flex items-center gap-3">
+        <img src={"../assets/logo.jpg"} className="w-8 h-8" />
+        <span className="text-[11px] font-mono font-semibold tracking-[0.28em] text-slate-400 uppercase">
+          Sanghvi Group
+        </span>
+      </div>
+
+      <div className="relative z-10">
+        <p className="font-mono text-[11px] tracking-[0.28em] text-red-400 uppercase mb-4">
+          Internal Operations Platform
+        </p>
+        <h1 className="font-display text-[2.65rem] leading-[1.08] font-semibold text-white mb-5">
+          Every ticket
+          <br />
+          has a <span className="text-red-500">pulse.</span>
+        </h1>
+        <p className="text-sm text-slate-400 leading-relaxed max-w-sm mb-10">
+          One sign-in for requesters raising issues, agents resolving them, and leaders watching it
+          all move. Customer Pulse keeps everyone on the same beat.
+        </p>
+
+        <svg viewBox="0 0 380 56" className="w-full max-w-sm h-12 mb-9" fill="none" aria-hidden="true">
+          <path
+            d="M0 30 H108 L128 8 L150 52 L172 16 L188 30 H380"
+            stroke="#ef4444"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pathLength={420}
+            style={{ strokeDasharray: 420, animation: "pulse-draw 2.4s ease-out forwards" }}
+          />
+          <circle cx="150" cy="52" r="3.5" fill="#ef4444" style={{ animation: "pulse-dot 1.8s ease-in-out infinite 1.2s" }} />
+        </svg>
+
+        
+      </div>
+
+      <div className="relative z-10 flex items-center gap-2 text-[11px] font-mono text-slate-500">
+      </div>
+    </div>
+
+    <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-10 bg-white">
+      <div className="w-full max-w-sm">
+        <div className="lg:hidden flex items-center gap-2.5 mb-9">
+          <SanghviLogo className="w-8 h-8" />
+          <span className="text-xs font-mono font-semibold tracking-[0.22em] text-slate-500 uppercase">
+            Customer Pulse
+          </span>
+        </div>
+        {children}
+      </div>
+    </div>
+  </div>
+);
+
 export default function App() {
   // Session State
   const [user, setUser] = useState<UserType | null>(null);
@@ -991,201 +1067,59 @@ export default function App() {
     // 1. Accept Invitation Form
     if (inviteToken) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
-          <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
-            <div className="text-center mb-6">
-              <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
-                <Mail size={24} />
-              </span>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Accept Invitation</h1>
-              <p className="text-xs text-slate-500 mt-1">Configure your corporate profile to join the customer pulse.</p>
+        <AuthShell>
+          <span className="inline-flex p-2.5 bg-red-50 border border-red-100 text-red-600 rounded-xl mb-4">
+            <Mail size={20} />
+          </span>
+          <h1 className="font-display text-2xl font-semibold text-slate-900 tracking-tight">Accept invitation</h1>
+          <p className="text-sm text-slate-500 mt-1.5 mb-7">Set up your profile to join Customer Pulse.</p>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
+              <ShieldAlert size={16} />
+              {error}
             </div>
+          )}
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
-                <ShieldAlert size={16} />
-                {error}
-              </div>
-            )}
+          <form onSubmit={handleAcceptInvite} className="space-y-4">
+           
 
-            <form onSubmit={handleAcceptInvite} className="space-y-4">
-             
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#E1352A] hover:bg-[#c62a20] text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-60"
+            >
+              {loading ? "Activating profile…" : "Activate account & sign in"}
+            </button>
+          </form>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
-              >
-                {loading ? "Activating Profile..." : "Activate Account & Login"}
-              </button>
-            </form>
-
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => setInviteToken(null)}
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-              >
-                Go back to login screen
-              </button>
-            </div>
+          <div className="mt-5 text-center">
+            <button
+              onClick={() => setInviteToken(null)}
+              className="text-xs text-red-600 hover:text-red-700 font-semibold hover:underline"
+            >
+              Back to sign in
+            </button>
           </div>
-        </div>
+        </AuthShell>
       );
     }
 
     // 2. Forgot Password (OTP request -> verify + reset)
     if (forgotMode) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
-          <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
-            <div className="text-center mb-6">
-              <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
-                <Key size={24} />
-              </span>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reset Password</h1>
-              <p className="text-xs text-slate-500 mt-1">
-                {forgotStep === "request"
-                  ? "Enter your account email and we'll send you a verification code."
-                  : forgotOtpVerified
-                  ? "Choose a new password for your account."
-                  : "Enter the 6-digit code we emailed you."}
-              </p>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
-                <ShieldAlert size={16} />
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 rounded-lg">
-                {success}
-              </div>
-            )}
-
-            {forgotStep === "request" && (
-              <form onSubmit={handleRequestOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email</label>
-                  <input
-                    type="email"
-                    placeholder="you@company.com"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
-                >
-                  {loading ? "Sending Code..." : "Send Verification Code"}
-                </button>
-              </form>
-            )}
-
-            {forgotStep === "verify" && !forgotOtpVerified && (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Verification Code</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6-digit code"
-                    value={forgotOtp}
-                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white tracking-[0.3em] text-center font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                    required
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">Sent to {forgotEmail}. Expires in 10 minutes.</p>
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading || forgotOtp.length !== 6}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50"
-                >
-                  {loading ? "Verifying..." : "Verify Code"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRequestOtp}
-                  disabled={loading}
-                  className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-                >
-                  Resend code
-                </button>
-              </form>
-            )}
-
-            {forgotStep === "verify" && forgotOtpVerified && (
-              <form onSubmit={handleResetPassword} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Choose a new password"
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                    required
-                    minLength={8}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Re-enter new password"
-                    value={forgotConfirmPassword}
-                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                    className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                    required
-                    minLength={8}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
-                >
-                  {loading ? "Resetting..." : "Reset Password"}
-                </button>
-              </form>
-            )}
-
-            <div className="mt-4 text-center">
-              <button
-                onClick={exitForgotPasswordFlow}
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-              >
-                Go back to login screen
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // 3. Main Login / Public Requester Signup
-      return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
-        <div className="w-full max-w-md bg-white border border-slate-200 shadow-md rounded-2xl p-8">
-          <div className="text-center mb-6">
-            <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
-              <img src="../assets/logo.jpg" alt="" className="w-12 h-12" />
-            </span>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">CUSTOMER PULSE</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              {signupMode
-                ? "Self-register as a Requester to issue, view, and track tickets."
-                : "Internal operations dashboard login page."}
-            </p>
-          </div>
+        <AuthShell>
+          <span className="inline-flex p-2.5 bg-red-50 border border-red-100 text-red-600 rounded-xl mb-4">
+            <Key size={20} />
+          </span>
+          <h1 className="font-display text-2xl font-semibold text-slate-900 tracking-tight">Reset password</h1>
+          <p className="text-sm text-slate-500 mt-1.5 mb-7">
+            {forgotStep === "request"
+              ? "Enter your account email and we'll send you a verification code."
+              : forgotOtpVerified
+              ? "Choose a new password for your account."
+              : "Enter the 6-digit code we emailed you."}
+          </p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
@@ -1200,59 +1134,191 @@ export default function App() {
             </div>
           )}
 
-            <form onSubmit={handleLogin} className="space-y-4">
+          {forgotStep === "request" && (
+            <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate email</label>
                 <input
                   type="email"
-                  placeholder="admin@company.com"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
+                  placeholder="you@company.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
                   required
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end -mt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotMode(true);
-                    setForgotEmail(loginEmail);
-                    setError("");
-                    setSuccess("");
-                  }}
-                  className="text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-                >
-                  Forgot password?
-                </button>
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
+                className="w-full bg-[#E1352A] hover:bg-[#c62a20] text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-60"
               >
-                {loading ? "Signing in..." : "Login to Customer Pulse"}
+                {loading ? "Sending code…" : "Send verification code"}
               </button>
-
-              
             </form>
-          
-        </div>
-      </div>
+          )}
+
+          {forgotStep === "verify" && !forgotOtpVerified && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Verification code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="6-digit code"
+                  value={forgotOtp}
+                  onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white tracking-[0.3em] text-center font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Sent to {forgotEmail}. Expires in 10 minutes.</p>
+              </div>
+              <button
+                type="submit"
+                disabled={loading || forgotOtp.length !== 6}
+                className="w-full bg-[#E1352A] hover:bg-[#c62a20] text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? "Verifying…" : "Verify code"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRequestOtp}
+                disabled={loading}
+                className="w-full text-xs text-red-600 hover:text-red-700 font-semibold hover:underline"
+              >
+                Resend code
+              </button>
+            </form>
+          )}
+
+          {forgotStep === "verify" && forgotOtpVerified && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">New password</label>
+                <input
+                  type="password"
+                  placeholder="Choose a new password"
+                  value={forgotNewPassword}
+                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm new password</label>
+                <input
+                  type="password"
+                  placeholder="Re-enter new password"
+                  value={forgotConfirmPassword}
+                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                  required
+                  minLength={8}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#E1352A] hover:bg-[#c62a20] text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-60"
+              >
+                {loading ? "Resetting…" : "Reset password"}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-5 text-center">
+            <button
+              onClick={exitForgotPasswordFlow}
+              className="text-xs text-red-600 hover:text-red-700 font-semibold hover:underline"
+            >
+              Back to sign in
+            </button>
+          </div>
+        </AuthShell>
+      );
+    }
+
+    // 3. Main Login / Public Requester Signup
+      return (
+      <AuthShell>
+        <h1 className="font-display text-2xl font-semibold text-slate-900 tracking-tight">
+          {signupMode ? "Create your account" : "Welcome back"}
+        </h1>
+        <p className="text-sm text-slate-500 mt-1.5 mb-7">
+          {signupMode
+            ? "Self-register as a requester to raise, view, and track tickets."
+            : "Sign in to Customer Pulse — for requesters, agents, and leadership alike."}
+        </p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 rounded-lg">
+            <ShieldAlert size={16} />
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 rounded-lg">
+            {success}
+          </div>
+        )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+              <input
+                type="email"
+                placeholder="admin@company.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end -mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(true);
+                  setForgotEmail(loginEmail);
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-[11px] text-red-600 hover:text-red-700 font-semibold hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#E1352A] hover:bg-[#c62a20] text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-60"
+            >
+              {loading ? "Signing in…" : "Sign in to Customer Pulse"}
+            </button>
+
+            
+          </form>
+
+          <p className="mt-7 text-center text-[11px] text-slate-400">
+            Trouble getting in? Contact your department admin for access.
+          </p>
+      </AuthShell>
     );
   }
 
@@ -2609,4 +2675,5 @@ export default function App() {
     </div>
   );
 }
+
 
