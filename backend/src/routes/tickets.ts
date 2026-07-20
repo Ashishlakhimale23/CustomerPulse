@@ -13,6 +13,8 @@ ticketRouter.post("/", requireAuth, ticketController.create);
 ticketRouter.get("/", requireAuth, ticketController.list); // only be accessed by global admin for the particular company
 ticketRouter.get("/:id", requireAuth, ticketController.getById);
 ticketRouter.patch("/:id", requireAuth, ticketController.update);
+// Full ticket edit (title/description/client info/department/category/project) - GLOBAL_ADMIN only.
+ticketRouter.patch("/:id/edit", requireAuth, requireRole(UserRole.GLOBAL_ADMIN), ticketController.editTicket);
 ticketRouter.post("/:id/resolve", requireAuth, ticketController.resolve);
 ticketRouter.get("/assigned/:id",requireAuth,ticketController.getAssigned )
 ticketRouter.get("/breached/:id",requireAuth,ticketController.getBreachedTickets)
