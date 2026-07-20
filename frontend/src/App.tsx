@@ -1522,7 +1522,7 @@ export default function App() {
           }
           {
             currentView == PAGES.CXO_DASHBOARD&& (
-              <CXODashboard setCurrentView={setCurrentView} setSelectedTicketId={setSelectedTicketId} token={token}/>
+              <CXODashboard setCurrentView={setCurrentView} setSelectedTicketId={setSelectedTicketId} token={token} currentUser={user!}/>
             )
           }
           {
