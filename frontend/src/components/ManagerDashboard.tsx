@@ -14,6 +14,9 @@ import {
   PauseCircle,
 } from "lucide-react";
 import { DepartmentTeam, DepartmentTeamMember, Ticket as TicketType, Department, PAGES } from "../types";
+import { AdvancedTicketFilters, FilterOption } from "./AdvancedTicketFilters";
+import TicketsTable from "./TicketsTable";
+import { Search } from "lucide-react";
 
 interface ManagerDashboardProps {
   token: string;
@@ -67,6 +70,50 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [reassignTarget, setReassignTarget] = useState<string>("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // ---- All Department Tickets: key/value filter search (HOD) ----
+  // Same access as CXO: every ticket across whichever department(s) are
+  // assigned to this HOD, plus tickets they personally raised. Backed by
+  // the (fixed) GET /tickets scoping in ticket.controller.ts.
+  const [showTicketSearch, setShowTicketSearch] = useState(false);
+  const [allDeptTickets, setAllDeptTickets] = useState<TicketType[]>([]);
+  const [filteredDeptTickets, setFilteredDeptTickets] = useState<TicketType[]>([]);
+  const [allTicketsLoading, setAllTicketsLoading] = useState(false);
+  const [allTicketsError, setAllTicketsError] = useState("");
+
+  const fetchAllDeptTickets = async () => {
+    setAllTicketsLoading(true);
+    setAllTicketsError("");
+    try {
+      const params = new URLSearchParams({ limit: "500" });
+      if (selectedDeptId) params.set("departmentId", selectedDeptId);
+      const res = await requestFn(`${API_BASE}/tickets?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllDeptTickets(data.items || []);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setAllTicketsError(err.error || "Failed to load department tickets");
+      }
+    } catch {
+      setAllTicketsError("Failed to load department tickets");
+    } finally {
+      setAllTicketsLoading(false);
+    }
+  };
+
+  // Category options for the filter dropdown - derived from whatever
+  // categories actually appear on the tickets this HOD can see, not a
+  // separate master-list fetch.
+  const categoryOptions: FilterOption[] = React.useMemo(() => {
+    const map = new Map<string, string>();
+    allDeptTickets.forEach((t) => {
+      if (t.categoryId && t.category?.name) map.set(t.categoryId, t.category.name);
+    });
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [allDeptTickets]);
 
 
 
@@ -198,6 +245,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     fetchManagerDepartments()
   }, [selectedDeptId, token]);
 
+  useEffect(() => {
+    if (showTicketSearch) fetchAllDeptTickets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTicketSearch, selectedDeptId, token]);
+
   const totalTeamTickets = teamData?.users.reduce((sum, u) => sum + u.activeTickets, 0) || 0;
   const totalBreached = teamData?.users.reduce((sum, u) => sum + u.breachedTickets, 0) || 0;
   const totalResolved = teamData?.users.reduce((sum, u) => sum + u.resolvedTickets, 0) || 0;
@@ -243,6 +295,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 ))}
               </select>
             </div>
+
+            <button
+              onClick={() => setShowTicketSearch((v) => !v)}
+              className={`text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer flex items-center gap-1.5 transition-all border shrink-0 ${
+                showTicketSearch
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50 bg-white"
+              }`}
+            >
+              <Search size={14} /> All Department Tickets
+            </button>
 
             <button
               onClick={() => fetchTeam(selectedDeptId)}
@@ -314,6 +377,37 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           </button>
         </div>
       </div>
+
+      {showTicketSearch && (
+        <div className="space-y-4">
+          <AdvancedTicketFilters
+            tickets={allDeptTickets}
+            departments={managedDepartments}
+            categories={categoryOptions}
+            onFilteredTicketsChange={setFilteredDeptTickets}
+            userRole="HOD"
+            userDepartmentIds={managedDepartments.map((d) => d.id)}
+            userId={currentUser.id}
+          />
+          {allTicketsError && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2 rounded-xl">
+              <AlertTriangle size={16} /> {allTicketsError}
+            </div>
+          )}
+          {allTicketsLoading ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-sm text-slate-400">
+              Loading department tickets...
+            </div>
+          ) : (
+            <TicketsTable
+              tickets={filteredDeptTickets}
+              currentView={PAGES.HOD_DASHBOARD}
+              setSelectedTicketId={setSelectedTicketId as any}
+              setCurrentView={setCurrentView as any}
+            />
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="p-3.5 bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2 rounded-xl">
@@ -560,5 +654,4 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 };
 
 export default ManagerDashboard;
-
 
