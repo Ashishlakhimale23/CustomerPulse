@@ -196,12 +196,18 @@ export const ticketController = {
   // GET /tickets - key/value filter search.
   //
   // Query params (all optional, combine as AND):
-  //   departmentId, status, assigneeId, priority, internalPriority,
+  //   departmentId, status, assigneeId, internalPriority,
   //   categoryId, projectId, clientName, state,
   //   dateOfOccuranceFrom / dateOfOccuranceTo   (date-of-occurrence range)
   //   slaDeadlineFrom / slaDeadlineTo           (SLA deadline range)
   //   createdFrom / createdTo                   (the generic "custom date filter")
   //   page, limit
+  //
+  // NOTE(changed): the searchable priority key is internalPriority, not
+  // the customer-facing SLA priority (P1-P4) - internalPriority is the
+  // triage metric staff actually search/sort by, so it replaces `priority`
+  // as a filter key here (the underlying field itself is untouched
+  // elsewhere, e.g. updatePriority()).
   //
   // Visibility rules (the "keys are the roles" scoping):
   //   - REQUESTER (and other requester-only roles): only tickets they personally filed.
@@ -234,7 +240,8 @@ export const ticketController = {
     if (req.query.departmentId) filterWhere.departmentId = req.query.departmentId as string;
     if (req.query.status) filterWhere.status = req.query.status as TicketStatus;
     if (req.query.assigneeId) filterWhere.assigneeId = req.query.assigneeId as string;
-    if (req.query.priority) filterWhere.priority = req.query.priority as TicketPriority;
+    // internalPriority is the searchable "priority" key (see NOTE above) -
+    // the raw SLA priority field is intentionally not filterable here.
     if (req.query.internalPriority) filterWhere.internalPriority = req.query.internalPriority as any;
     if (req.query.categoryId) filterWhere.categoryId = req.query.categoryId as string;
     if (req.query.projectId) filterWhere.projectId = req.query.projectId as string;
@@ -699,3 +706,4 @@ export const ticketController = {
     res.status(204).send();
   },
 };
+
