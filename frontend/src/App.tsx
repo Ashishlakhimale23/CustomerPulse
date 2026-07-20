@@ -1692,6 +1692,8 @@ export default function App() {
               metric={metric!}
               setCurrentView={setCurrentView}
               onBack={() => setCurrentView(PAGES.DASHBOARD)}
+              departments={departments}
+              clients={clients}
             />
           )}
 
@@ -2726,6 +2728,5 @@ export default function App() {
     </div>
   );
 }
-
 
 
