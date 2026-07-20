@@ -10,6 +10,7 @@ export const clientRouter = Router();
 
 clientRouter.get("/",requireAuth,clientController.getClients)
 clientRouter.post("/",requireAuth,requireRole(UserRole.GLOBAL_ADMIN),clientController.createClient)
+clientRouter.post("/import",requireAuth,requireRole(UserRole.GLOBAL_ADMIN),clientController.importClients)
 clientRouter.delete("/:id",requireAuth,requireRole(UserRole.GLOBAL_ADMIN),clientController.deleteClient)
 clientRouter.put("/:id",requireAuth,requireRole(UserRole.GLOBAL_ADMIN),clientController.updateClient)
 
