@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, ShieldAlert, CheckCircle, ChevronDown, ChevronUp, Star, PowerOff } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Edit2, Trash2, ShieldAlert, CheckCircle, ChevronDown, ChevronUp, Star, PowerOff, Upload, Download } from "lucide-react";
 import { Client, Project } from "../types";
+import * as XLSX from "xlsx";
 
 interface ClientManagementProps {
   token: string;
@@ -13,6 +14,8 @@ type DeleteDialogProps = {
   onClose: () => void;
   onConfirm: () => void;
 };
+
+const API_BASE = "http://localhost:3000";
 
 export default function ClientManagement({ token }: ClientManagementProps) {
   const [clients, setClients] = useState<Client[]>([]);
@@ -51,11 +54,87 @@ export default function ClientManagement({ token }: ClientManagementProps) {
   const [deleteProjectName, setDeleteProjectName] = useState<string>("");
   const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false);
 
+  // import/export
+  const [importLoading, setImportLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadTemplate = () => {
+    const headers = ["Client Name", "Wind Client", "Key Client", "Projects"];
+    const exampleRows = [
+      ["Acme Corporation", "Yes", "No", "Project Alpha=Yes, Project Beta=No"],
+      ["Globex Inc", "No", "Yes", ""],
+    ];
+    const sheetData = [headers, ...exampleRows];
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    worksheet["!cols"] = [{ wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 50 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Clients");
+    XLSX.writeFile(workbook, "client_import_template.xlsx");
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setError("");
+    setSuccess("");
+    setImportLoading(true);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const clients = rows.map((row) => {
+        const clientName = row["Client Name"] || row["clientName"] || row["CLIENT NAME"] || "";
+        const windClient = row["Wind Client"] || row["windClient"] || row["WIND CLIENT"] || "";
+        const keyClient = row["Key Client"] || row["keyClient"] || row["KEY CLIENT"] || "";
+        const projects = row["Projects"] || row["projects"] || row["PROJECTS"] || "";
+        return { clientName, windClient, keyClient, projects };
+      }).filter((r) => r.clientName?.toString().trim());
+
+      if (clients.length === 0) {
+        setError("No valid rows found in the spreadsheet.");
+        setImportLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/clients/import`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ clients }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Import failed");
+
+      const msg = data.message;
+      const r = data.data;
+      let detail = "";
+      if (r) {
+        detail = ` Created: ${r.created}, New projects added: ${r.projectsAdded}`;
+        if (r.clientsSkipped) detail += `, Existing clients skipped: ${r.clientsSkipped}`;
+        if (r.projectsSkipped) detail += `, Existing projects skipped: ${r.projectsSkipped}`;
+      }
+      setSuccess((msg || "Import completed") + detail);
+      fetchClients();
+    } catch (err: any) {
+      setError(err.message || "Import failed");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   const fetchClients = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:3000/clients", {
+      const res = await fetch(`${API_BASE}/clients`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch clients");
@@ -80,7 +159,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch("http://localhost:3000/clients", {
+      const res = await fetch(`${API_BASE}/clients`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,7 +185,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`http://localhost:3000/clients/${editingClient.id}`, {
+      const res = await fetch(`${API_BASE}/clients/${editingClient.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +208,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`http://localhost:3000/clients/${deleteClientId}`, {
+      const res = await fetch(`${API_BASE}/clients/${deleteClientId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -152,7 +231,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`http://localhost:3000/clients/${clientId}/projects`, {
+      const res = await fetch(`${API_BASE}/clients/${clientId}/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -177,7 +256,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`http://localhost:3000/projects/${editingProject.id}`, {
+      const res = await fetch(`${API_BASE}/projects/${editingProject.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -199,7 +278,7 @@ export default function ClientManagement({ token }: ClientManagementProps) {
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`http://localhost:3000/projects/${deleteProjectId}`, {
+      const res = await fetch(`${API_BASE}/projects/${deleteProjectId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -220,6 +299,30 @@ export default function ClientManagement({ token }: ClientManagementProps) {
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Clients Management</h1>
           <p className="text-sm text-slate-500 mt-1">Configure global business clients, mark key accounts, and manage each client's projects.</p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleFileSelected}
+          />
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-100"
+          >
+            <Download size={14} /> Template
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50"
+          >
+            <Upload size={14} /> {importLoading ? "Importing..." : "Import"}
+          </button>
         </div>
       </div>
 
