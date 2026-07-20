@@ -15,9 +15,12 @@ import { prismaVersion } from "../generated/prisma/internal/prismaNamespace";
 import { notificationService } from "../services/notification.service";
 import { id } from "zod/v4/locales";
 
-// Roles whose "list" view is scoped to just their department, rather
-// than being requester-only (see below) or company-wide (GLOBAL_ADMIN).
-const DEPARTMENT_SCOPED_ROLES: UserRole[] = [ UserRole.HOD];
+// Roles whose "list" view is scoped to the department(s) assigned to them,
+// rather than being requester-only (see below) or company-wide (GLOBAL_ADMIN).
+// NOTE(fixed): this previously only included HOD, so CXO users fell through
+// to "no forced scope" and could see every ticket in the company - even
+// though CXO and HOD are meant to have identical (department-scoped) access.
+const DEPARTMENT_SCOPED_ROLES: UserRole[] = [UserRole.HOD, UserRole.CXO];
 
 const BASE_SLA_MINUTES_BY_PRIORITY: Record<TicketPriority, number> = {
   P1: 4 * 60,
@@ -25,6 +28,48 @@ const BASE_SLA_MINUTES_BY_PRIORITY: Record<TicketPriority, number> = {
   P3: 24 * 60,
   P4: 72 * 60,
 };
+
+// NOTE(fixed): req.user!.departmentId does not exist - the JWT payload only
+// ever carries { id, role } (see auth.service.ts signAuthToken call), and the
+// User model itself has no singular `departmentId` column for HOD/CXO. A HOD
+// manages departments via Department.managerId and a CXO via
+// Department.cxoId, and either one can be assigned to MULTIPLE departments -
+// so the only correct way to scope their ticket list is to look this up.
+// Mirrors the same lookup already used in managerDashboard.controller.ts /
+// cxodashboard.controller.ts, so all three stay consistent.
+async function getScopedDepartmentIds(userId: string, role: UserRole): Promise<string[]> {
+  if (role === UserRole.HOD) {
+    const departments = await prisma.department.findMany({
+      where: { managerId: userId },
+      select: { id: true },
+    });
+    return departments.map((d) => d.id);
+  }
+  if (role === UserRole.CXO) {
+    const departments = await prisma.department.findMany({
+      where: { cxoId: userId },
+      select: { id: true },
+    });
+    return departments.map((d) => d.id);
+  }
+  return [];
+}
+
+// Parses an optional "YYYY-MM-DD" query param into a Date range bound.
+// `endOfDay` pushes the "to" side to 23:59:59 so a same-day from/to range
+// (e.g. dateOfOccuranceFrom=dateOfOccuranceTo=today) is inclusive.
+function parseDateBound(value: unknown, endOfDay: boolean): Date | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  const date = new Date(endOfDay ? `${value}T23:59:59.999` : value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function dateRangeFilter(fromValue: unknown, toValue: unknown): { gte?: Date; lte?: Date } | undefined {
+  const gte = parseDateBound(fromValue, false);
+  const lte = parseDateBound(toValue, true);
+  if (!gte && !lte) return undefined;
+  return { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+}
 
 export const ticketController = {
 
@@ -148,15 +193,25 @@ export const ticketController = {
     res.status(201).json(ticket);
   },
 
-  // GET /tickets?departmentId=&status=&assigneeId=&priority=&page=&limit=
+  // GET /tickets - key/value filter search.
   //
-  // Visibility rules:
-  //   - REQUESTER/EMPLOYEE/VENDOR/CONTRACTOR: only tickets they personally filed.
+  // Query params (all optional, combine as AND):
+  //   departmentId, status, assigneeId, priority, internalPriority,
+  //   categoryId, projectId, clientName, state,
+  //   dateOfOccuranceFrom / dateOfOccuranceTo   (date-of-occurrence range)
+  //   slaDeadlineFrom / slaDeadlineTo           (SLA deadline range)
+  //   createdFrom / createdTo                   (the generic "custom date filter")
+  //   page, limit
+  //
+  // Visibility rules (the "keys are the roles" scoping):
+  //   - REQUESTER (and other requester-only roles): only tickets they personally filed.
   //   - AGENT: only tickets assigned to them, or filed by them - never
   //     the full department queue (agents work their own queue, they
   //     don't browse everyone else's).
-  //   - TEAM_LEAD/MANAGER/DEPT_ADMIN: their whole department's tickets.
-  //   - GLOBAL_ADMIN: everything, optionally filtered by departmentId.
+  //   - HOD / CXO: identical access - every ticket in whichever department(s)
+  //     are assigned to them (a HOD/CXO can be assigned to more than one
+  //     department), plus any ticket they personally filed themselves.
+  //   - GLOBAL_ADMIN: everything, optionally narrowed by departmentId.
   async list(req: AuthedRequest, res: Response) {
     const role = req.user!.role;
     const pagination = parsePagination(req);
@@ -168,22 +223,49 @@ export const ticketController = {
     } else if (role === UserRole.AGENT) {
       scopeWhere = { OR: [{ assigneeId: req.user!.id }, { requesterId: req.user!.id }] };
     } else if (DEPARTMENT_SCOPED_ROLES.includes(role)) {
-      scopeWhere = { departmentId: req.user!.departmentId ?? undefined };
+      const deptIds = await getScopedDepartmentIds(req.user!.id, role);
+      // Scoped to their department(s) OR tickets they raised themselves.
+      scopeWhere = { OR: [{ departmentId: { in: deptIds } }, { requesterId: req.user!.id }] };
     }
-    // GLOBAL_ADMIN: no forced scope - can filter by departmentId query param below.
+    // GLOBAL_ADMIN: no forced scope - has access to everything.
 
-    const where = {
-      ...scopeWhere,
-      departmentId: (req.query.departmentId as string) ?? (scopeWhere as any).departmentId ?? undefined,
-      status: req.query.status as any,
-      assigneeId: req.query.assigneeId as string | undefined,
-      priority: req.query.priority as any,
-    };
+    const filterWhere: Record<string, unknown> = {};
+
+    if (req.query.departmentId) filterWhere.departmentId = req.query.departmentId as string;
+    if (req.query.status) filterWhere.status = req.query.status as TicketStatus;
+    if (req.query.assigneeId) filterWhere.assigneeId = req.query.assigneeId as string;
+    if (req.query.priority) filterWhere.priority = req.query.priority as TicketPriority;
+    if (req.query.internalPriority) filterWhere.internalPriority = req.query.internalPriority as any;
+    if (req.query.categoryId) filterWhere.categoryId = req.query.categoryId as string;
+    if (req.query.projectId) filterWhere.projectId = req.query.projectId as string;
+    if (req.query.clientName) filterWhere.clientName = req.query.clientName as string;
+    if (req.query.state) filterWhere.state = req.query.state as string;
+
+    const dateOfOccurance = dateRangeFilter(req.query.dateOfOccuranceFrom, req.query.dateOfOccuranceTo);
+    if (dateOfOccurance) filterWhere.dateOfOccurance = dateOfOccurance;
+
+    const slaDeadline = dateRangeFilter(req.query.slaDeadlineFrom, req.query.slaDeadlineTo);
+    if (slaDeadline) filterWhere.slaDeadline = slaDeadline;
+
+    // The generic "custom date filter" - filed-on date.
+    const createdRange = dateRangeFilter(req.query.createdFrom, req.query.createdTo);
+    if (createdRange) filterWhere.createdAt = createdRange;
+
+    // scopeWhere may itself be an OR clause (dept-scoped roles), so it has
+    // to be AND-ed with the query filters rather than spread/merged, or a
+    // filter like departmentId would silently clobber the scope's OR.
+    const where = Object.keys(scopeWhere).length ? { AND: [scopeWhere, filterWhere] } : filterWhere;
 
     const [tickets, total] = await Promise.all([
       prisma.ticket.findMany({
         where,
-        include: { assignee: true, requester: true },
+        include: {
+          assignee: { select: { fullName: true, email: true, supportLevel: true } },
+          requester: { select: { id: true, fullName: true, email: true, employeeId: true, role: true } },
+          department: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true, defaultSlaMinutes: true, defaultPriority: true } },
+          project: { select: { id: true, name: true } },
+        },
         orderBy: { createdAt: "desc" },
         skip: pagination.skip,
         take: pagination.take,
