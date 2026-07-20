@@ -25,7 +25,7 @@ export const UserDirectory = (
   const [editUserMaxTickets, setEditUserMaxTickets] = useState(15);
 
 
-  const isAdmin = user ? ["GLOBAL_ADMIN", "DEPT_ADMIN", "MANAGER"].includes(user.role) : false;
+  const isAdmin = user ? ["GLOBAL_ADMIN"].includes(user.role) : false;
 
 
   const handleSaveUserDetails = async (e: React.FormEvent) => {
@@ -75,8 +75,8 @@ export const UserDirectory = (
     return (
         <div className="space-y-6 font-sans">
               <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs">
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Operators Directory</h1>
-                <p className="text-sm text-slate-500 mt-1">Corporate users registry. Click an operator record to configure role profiles and routing caps.</p>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Staff Directory</h1>
+                <p className="text-sm text-slate-500 mt-1">Staff registry. Click an user record to configure role profiles and routing caps.</p>
               </div>
 
               <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
@@ -84,7 +84,7 @@ export const UserDirectory = (
                   <table className="min-w-full divide-y divide-slate-100 text-xs">
                     <thead className="bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider">
                       <tr>
-                        <th className="px-6 py-3.5 text-left">Operator</th>
+                        <th className="px-6 py-3.5 text-left">User</th>
                         <th className="px-6 py-3.5 text-left">Email Address</th>
                         <th className="px-6 py-3.5 text-left">Role Profile</th>
                         <th className="px-6 py-3.5 text-left">Support Tier</th>

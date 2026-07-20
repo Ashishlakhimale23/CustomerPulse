@@ -941,7 +941,7 @@ export default function App() {
                 <Mail size={24} />
               </span>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">Accept Invitation</h1>
-              <p className="text-xs text-slate-500 mt-1">Configure your corporate profile to join the Helpdesk operations hub.</p>
+              <p className="text-xs text-slate-500 mt-1">Configure your corporate profile to join the customer pulse.</p>
             </div>
 
             {error && (
@@ -1122,7 +1122,7 @@ export default function App() {
             <span className="inline-flex p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl mb-3">
               <img src="../assets/logo.jpg" alt="" className="w-12 h-12" />
             </span>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">SML OPERATIONS</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">CUSTOMER PULSE</h1>
             <p className="text-xs text-slate-500 mt-1">
               {signupMode
                 ? "Self-register as a Requester to issue, view, and track tickets."
@@ -1143,79 +1143,9 @@ export default function App() {
             </div>
           )}
 
-          {signupMode ? (
-            /* PUBLIC REQUESTER SIGNUP */
-            <form onSubmit={handleSignup} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email Address</label>
-                <input
-                  type="email"
-                  placeholder="employee@company.com"
-                  value={signupEmail}
-                  onChange={(e) => setSignupEmail(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="Jane Doe"
-                  value={signupFullName}
-                  onChange={(e) => setSignupFullName(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Employee ID (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="EMP001"
-                  value={signupEmployeeId}
-                  onChange={(e) => setSignupEmployeeId(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="Choose password"
-                  value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
-                  className="w-full text-sm p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
-              >
-                {loading ? "Registering Account..." : "Create Requester Account"}
-              </button>
-
-              <div className="mt-4 text-center">
-                <button
-                  type="button"
-                  onClick={() => setSignupMode(false)}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-                >
-                  Already registered? Sign In
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* STANDARD OPERATIONS LOGIN */
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
                 <input
                   type="email"
                   placeholder="admin@company.com"
@@ -1258,24 +1188,11 @@ export default function App() {
                 disabled={loading}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
               >
-                {loading ? "Signing in..." : "Login to Operations Hub"}
+                {loading ? "Signing in..." : "Login to Customer Pulse"}
               </button>
 
-              <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setSignupMode(true)}
-                  className="text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
-                >
-                  Register new Requester account
-                </button>
-                <span className="text-zinc-400 text-[10px]">
-                  Staff & Agents must be registered via admin email invitations.
-                </span>
-              </div>
+              
             </form>
-          )}
-
           
         </div>
       </div>
@@ -1331,7 +1248,7 @@ export default function App() {
         {/* Left Side Corporate Sidebar navigation */}
         <nav className="w-64 bg-white text-slate-600 flex flex-col border-r border-slate-200 select-none shrink-0 font-sans text-xs">
           <div className="p-4 uppercase text-[10px] font-semibold text-slate-400 tracking-wider border-b border-slate-200">
-            Operations Navigation
+            Navigation
           </div>
 
           <div className="flex-1 py-2 space-y-0.5 overflow-y-auto">
@@ -1361,7 +1278,7 @@ export default function App() {
               </button>
             ) : null}
 
-            {isAdmin ? (
+            {isManager ? (
               <button
                 onClick={() => setCurrentView(PAGES.HOD_ANALYTICS)}
                 className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
@@ -1375,19 +1292,7 @@ export default function App() {
               </button>
             ) : null}
 
-            {isCxo ? (
-              <button
-                onClick={() => setCurrentView(PAGES.CXO_ANALYTICS)}
-                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
-                  currentView === PAGES.CXO_ANALYTICS
-                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
-                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
-                }`}
-              >
-                <Layers size={15} />
-                <span>Executive Analytics</span>
-              </button>
-            ) : null}
+            
 
             {isCxo ? (
               <button
@@ -1402,6 +1307,20 @@ export default function App() {
                 <span>Executive Dashboard</span>
               </button>
             ) : null}
+            
+            {isCxo ? (
+              <button
+                onClick={() => setCurrentView(PAGES.CXO_ANALYTICS)}
+                className={`w-full text-left px-5 py-2.5 flex items-center gap-3 cursor-pointer ${
+                  currentView === PAGES.CXO_ANALYTICS
+                    ? "bg-slate-100 text-slate-900 border-l-4 border-slate-900 font-semibold"
+                    : "hover:bg-slate-50 hover:text-slate-900 text-slate-500 transition-colors"
+                }`}
+              >
+                <Layers size={15} />
+                <span>Executive Analytics</span>
+              </button>
+            ) : null}
 
             {/* Staff / Agent Directory */}
             {isGlobalAdmin && (
@@ -1414,7 +1333,7 @@ export default function App() {
                 }`}
               >
                 <Users size={15} />
-                <span>Users Directory</span>
+                <span>Staff Directory</span>
               </button>
             )}
 
@@ -1429,7 +1348,7 @@ export default function App() {
                 }`}
               >
                 <User size={15} />
-                <span>Requestor Directory</span>
+                <span>Users Directory</span>
               </button>
             )}
 
@@ -1444,7 +1363,7 @@ export default function App() {
                 }`}
               >
                 <Mail size={15} />
-                <span>Pending Invites</span>
+                <span>Invitations</span>
               </button>
             )}
 
@@ -1537,26 +1456,21 @@ export default function App() {
           {
             currentView == PAGES.CXO_ANALYTICS && (
               <CXODashboardMock token={token}/>
-
             )
           }
           {
             currentView == PAGES.HOD_ANALYTICS && (
-              <DepartmentDashboard/>
+              <CXODashboardMock token={token}/>
             )
-
           }
-
           {
             currentView == PAGES.CXO_DASHBOARD&& (
               <CXODashboard setCurrentView={setCurrentView} setSelectedTicketId={setSelectedTicketId} token={token}/>
             )
-
           }
-
           {
             currentView == PAGES.AGENT_ANALYTICS && (
-              <AgentDashboard/>
+              <AgentDashboard token={token}/>
             )
           }
 
@@ -2478,7 +2392,7 @@ export default function App() {
                             Action Performed
                           </th>
                           <th className="px-6 py-3.5 text-left">
-                            Operator Involved
+                            User Involved
                           </th>
                           <th className="px-6 py-3.5 text-left">
                             Entity Category

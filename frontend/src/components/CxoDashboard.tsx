@@ -200,9 +200,7 @@ export const CXODashboard: React.FC<CXODashboardProps> = ({
     teamData?.users.filter(
       (u) =>
         u.id !== ticket.assigneeId &&
-        u.activeTickets <= 3 &&
-        u.departmentId === ticket.departmentId &&
-        u.id !== ticket.requesterId
+        u.departmentId === ticket.departmentId 
     );
 
   return (

@@ -1,11 +1,6 @@
 import { InternalPriorityLevel } from "../generated/prisma/client";
 
 /**
- * Internal triage metric - separate from TicketPriority (P1-P4), which
- * still drives SLA/TAT and can be manually overridden by an admin. This
- * metric is purely informational context for triage and is computed fresh
- * from five weighted signals every time a ticket is created:
- *
  *   P1  is the work stopping         (from the selected category)
  *   P2  is this a safety violation   (from the selected category)
  *   P3  is this a shutdown job       (from the selected project)
@@ -43,7 +38,7 @@ const FACTORS: Factor[] = [
 
 export const internalPriorityService = {
   /**
-   * Runs the weighted scoring formula:
+   * weighted scoring formula:
    *   selectedSumWeights = sum of the weight of every checked factor
    *   severityScore      = selectedSumWeights / 10
    *   activePriorityMix  = (checked factor's weight) / selectedSumWeights
@@ -80,10 +75,7 @@ export const internalPriorityService = {
 
   /**
    * Critical: 8-10 | High: 6-7.99 | Medium: 3-5.99 | Low: 0-2.99
-   * The upper bound on Critical is open-ended (a finalScore can exceed 10
-   * when several high-weight/high-multiplier factors stack) rather than
-   * capped, so anything at or above 8 still resolves to CRITICAL.
-   */
+  */
   scoreToLevel(finalScore: number): InternalPriorityLevel {
     if (finalScore >= 8) return InternalPriorityLevel.CRITICAL;
     if (finalScore >= 6) return InternalPriorityLevel.HIGH;

@@ -723,10 +723,6 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
             {/* Structured ticket metadata */}
             <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-mono text-slate-600">
               <div>
-                <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Employee ID</span>
-                <span className="font-semibold text-slate-900">{ticket.employeeId || "Unspecified"}</span>
-              </div>
-              <div>
                 <span className="text-slate-400 block font-sans text-[10px] uppercase font-bold tracking-wider mb-0.5">Client / Company</span>
                 <span className="font-semibold text-slate-900">{ticket.clientName}</span>
               </div>
@@ -1188,18 +1184,9 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                     {escalations.map((esc) => (
                       <div key={esc.id} className="text-[11px] relative">
                         <span className="absolute -left-[13px] top-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white" />
-                        <div className="font-mono text-zinc-500 flex justify-between">
-                          <span>
-                            Tier: <strong className="text-red-700">{esc.fromLevel || "L1"} → {esc.toLevel}</strong>
-                          </span>
-                          <span>{new Date(esc.createdAt).toLocaleDateString()}</span>
-                        </div>
                         <p className="text-zinc-700 font-medium mt-0.5">{esc.reason}</p>
                         <span className="text-[10px] text-zinc-400 font-mono block">
                           Escalated by: {esc.escalatedBy?.fullName || "System"} 
-                        </span>
-                        <span className="text-[10px] text-zinc-400 font-mono block">
-                          Escalated To: {esc.escalatedTo?.fullName || "System"} 
                         </span>
                       </div>
                     ))}

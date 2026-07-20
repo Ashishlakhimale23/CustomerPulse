@@ -1,4 +1,3 @@
-import nodemailer from "nodemailer";
 import dotenv from "dotenv"
 import { Resend } from "resend";
 dotenv.config()
@@ -11,6 +10,8 @@ export interface SendMailInput {
   subject: string;
   html: string;
 }
+
+console.log(transporter)
 
 export async function sendMail({ to, subject, html }: SendMailInput) {
   try {

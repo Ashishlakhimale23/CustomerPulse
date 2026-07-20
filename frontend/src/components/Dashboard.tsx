@@ -15,25 +15,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
 
     const isStaff = user ? ["AGENT"].includes(user.role) : false;
     const isAdmin = user ? ["GLOBAL_ADMIN","HOD","CXO"].includes(user.role) : false;
-
-    const fetchTickets = async () => {
-    try {
-      let deptId 
-      if (isStaff && !isAdmin && user?.departmentId) {
-        deptId = user.departmentId;
-      }
-
-      let url = `http://localhost:3000/tickets`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTickets(data.items);
-      }
-      
-    } catch (err) {}
-  };
+   
     return (
          <div className="space-y-6 font-sans">
               {/* Top Banner section */}
@@ -53,7 +35,7 @@ export const Dashboard = ({setCurrentView,user,setSelectedTicketId,token,metric}
                     className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 cursor-pointer flex items-center gap-2 rounded-lg transition-all shadow-xs"
                   >
                     <Plus size={16} />
-                    Submit New Ticket
+                    Create New Ticket
                   </button>
                 </div>
               </div>

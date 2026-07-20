@@ -192,9 +192,9 @@ export const RequestorDirectory = (
     <div className="space-y-6 font-sans">
       <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Requestor Directory</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Users Directory</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Review self-registered requester accounts, approve or reject signups, and manage access.
+            Review self-registered user accounts, approve or reject signups, and manage access.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ export const RequestorDirectory = (
           <table className="min-w-full divide-y divide-slate-100 text-xs">
             <thead className="bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-3.5 text-left">Requestor</th>
+                <th className="px-6 py-3.5 text-left">User</th>
                 <th className="px-6 py-3.5 text-left">Email</th>
                 <th className="px-6 py-3.5 text-left">Registered</th>
                 <th className="px-6 py-3.5 text-left">Tickets</th>
@@ -309,7 +309,7 @@ export const RequestorDirectory = (
               {loading ? (
                 <tr><td colSpan={7} className="px-6 py-6 text-center text-slate-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-6 text-center text-slate-400 italic">No requestors match this filter.</td></tr>
+                <tr><td colSpan={7} className="px-6 py-6 text-center text-slate-400 italic">No user match this filter.</td></tr>
               ) : (
                 filtered.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50/50 transition-colors align-top">
@@ -401,13 +401,13 @@ export const RequestorDirectory = (
         <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs flex items-center justify-center p-6 z-50">
           <div className="bg-white border border-slate-200 w-full max-w-md p-6 rounded-2xl shadow-xl space-y-4">
             <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Message Requestor
+              Message User
             </h2>
             <textarea
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               rows={4}
-              placeholder="Type a message for this requestor..."
+              placeholder="Type a message for this user..."
               className="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             />
             <div className="flex gap-2 justify-end border-t border-slate-100 pt-4">

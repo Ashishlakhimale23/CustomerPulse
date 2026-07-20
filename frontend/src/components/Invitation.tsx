@@ -397,7 +397,7 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
 
         {/* Invite dispatch panel - Attribute order: Name, Email, Role, Department, Category */}
         <div className="bg-white border border-zinc-200 p-6 h-fit shadow-sm">
-          <h3 className="text-sm font-semibold uppercase text-zinc-900 border-b pb-2 mb-4">Onboard Staff Member</h3>
+          <h3 className="text-sm font-semibold uppercase text-zinc-900 border-b pb-2 mb-4">Onboard Staff Member and users</h3>
 
           <form onSubmit={handleSendInvite} className="space-y-4">
             {/* 1. Name */}
@@ -435,9 +435,10 @@ export const InvitationComponent: React.FC<InvitationComponentProps> = ({
                 className="w-full text-xs p-2.5 border border-zinc-300 bg-white"
                 required
               >
-                {["CXO","HOD","AGENT","REQUESTER"].map((role) => (
+                {["CXO","HOD","AGENT","USER"].map((role) => (
+
                   
-                  <option key={role} value={role}>
+                  <option key={role} value={role == "USER" ? UserRole.REQUESTER : role }>
                     {role}
                   </option>
                 ))}

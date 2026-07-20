@@ -834,7 +834,7 @@ export default function ManagerAnalyticsMock({ token, apiFetch }: ManagerAnalyti
           <div>
             <p className="text-xs font-mono uppercase tracking-widest mb-1 flex items-center gap-1.5" style={{ color: C.neutral400 }}>
               <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: C.primary500 }} />
-              Manager Console &middot; Analytics
+              Executive Console &middot; Analytics
             </p>
             <h1 className="text-2xl font-semibold tracking-tight" style={{ color: C.neutral900 }}>{deptLabel}</h1>
             <p className="text-sm mt-0.5" style={{ color: C.neutral500 }}>

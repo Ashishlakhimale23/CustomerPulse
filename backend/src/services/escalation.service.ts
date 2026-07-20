@@ -30,6 +30,8 @@ export const escalationService = {
       include: { keywords: true },
     });
 
+    /*
+
     const fromLevel = ticket.supportLevel;
     const toLevel = params.toLevel ?? nextLevel(fromLevel);
 
@@ -63,36 +65,49 @@ export const escalationService = {
 
     const target = scored[0].agent;
 
+    */
+
     const [escalation, updatedTicket] = await prisma.$transaction([
       prisma.ticketEscalation.create({
         data: {
           ticketId,
-          fromLevel: fromLevel ?? undefined,
-          toLevel,
+          fromLevel: 'L1',
+          toLevel: 'L1',
           escalatedById,
-          escalatedToId: target.id,
+          escalatedToId:ticket.assigneeId!,
           reason,
           isAutomatic,
         },
       }),
-      
+
       prisma.ticket.update({
         where: { id: ticketId },
         data: {
-          supportLevel: toLevel,
-          assigneeId: target.id,
-          escalatedToId: target.id,
+          supportLevel: 'L1',
+          assigneeId: ticket.assigneeId,
+          escalatedToId: ticket.assigneeId,
           escalatedAt: new Date(),
           escalationReason: reason,
           status: TicketStatus.IN_PROGRESS,
-          // Escalating a ticket is itself a signal it's more urgent than
-          // first triaged - bump internalPriority one notch if not already CRITICAL.
-          internalPriority: bumpPriority(ticket.internalPriority),
         },
       }),
     ]);
 
-    await notificationService.sendTicketEscalated(updatedTicket, escalation, target);
+    const cxo = await prisma.department.findFirst({
+      where :  {
+         id : ticket.departmentId,
+      },
+      select : {
+        cxo : {
+          select : {
+            email : true,
+            fullName : true
+          }
+        }
+      }
+    })
+
+    await notificationService.sendTicketEscalated(updatedTicket, escalation, cxo?.cxo!);
     return { escalation, ticket: updatedTicket };
   },
 
@@ -153,11 +168,9 @@ export const escalationService = {
           return results
         }
 
-        await notificationService.sendSlaBreachWarning(ticket,{email:managerAndCxo.cxo.email,departmentName:managerAndCxo.name,assigneeName:breachedTicket.assignee?.fullName});
-        
         await notificationService.sendSlaBreachWarning(ticket,{email:managerAndCxo.manager.email,departmentName:managerAndCxo.name,assigneeName:breachedTicket.assignee?.fullName});
 
-        results.push(`Notification has been sent to ${managerAndCxo.cxo.fullName}`);
+        results.push(`Notification has been sent to ${managerAndCxo.manager.fullName}`);
       } catch (err) {
         // No agent available at the next level - leave it flagged as
         // breached so it shows up on dashboards even without an escalation record.

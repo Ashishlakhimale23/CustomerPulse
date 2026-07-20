@@ -170,66 +170,7 @@ export const Profile: React.FC<ProfileProps> = ({
         )}
       </div>
 
-      {/* Reset Password Form Section */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-6 space-y-6">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-          <Lock size={16} className="text-slate-700" />
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Reset Password
-          </h2>
-        </div>
-
-        {passwordError && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 rounded-xl">
-            <AlertTriangle size={16} className="shrink-0" /> {passwordError}
-          </div>
-        )}
-        {passwordSuccess && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 rounded-xl">
-            <CheckCircle size={16} className="shrink-0" /> {passwordSuccess}
-          </div>
-        )}
-
-        <form onSubmit={handleResetPassword} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Previous Password
-            </label>
-            <input
-              type="password"
-              placeholder="Enter current password"
-              value={previousPassword}
-              onChange={(e) => setPreviousPassword(e.target.value)}
-              className="w-full text-xs p-3 border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-slate-400 font-mono"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              New Password
-            </label>
-            <input
-              type="password"
-              placeholder="Enter new password (min. 6 chars)"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full text-xs p-3 border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-slate-400 font-mono"
-              required
-            />
-          </div>
-
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-6 py-3 rounded-xl cursor-pointer transition-all shadow-xs disabled:opacity-50"
-            >
-              {loading ? "Updating Password..." : "Update Password"}
-            </button>
-          </div>
-        </form>
-      </div>
+      
     </div>
   );
 };

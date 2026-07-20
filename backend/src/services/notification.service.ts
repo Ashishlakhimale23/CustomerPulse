@@ -1,5 +1,6 @@
 import { sendMail } from "../lib/mailer";
 import type { Ticket, User, TicketEscalation } from "../generated/prisma/client";
+import { email } from "zod";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
 
@@ -67,13 +68,16 @@ export const notificationService = {
     });
   },
 
-  async sendTicketEscalated(ticket: Ticket, escalation: TicketEscalation, escalatedTo: User) {
+  async sendTicketEscalated(ticket: Ticket, escalation: TicketEscalation, cxo: {fullName: string,email:string}) {
+    // send this to the cxo
+
+    console.log(cxo.email)
     await sendMail({
-      to: escalatedTo.email,
-      subject: `[${ticket.ticketNumber}] Escalated to ${escalation.toLevel}: ${ticket.title}`,
-      html: layout("Ticket escalated to you", `
-        <p>Hi ${escalatedTo.fullName},</p>
-        <p>Ticket <b>${ticket.ticketNumber}</b> has been escalated from ${escalation.fromLevel ?? "N/A"} to <b>${escalation.toLevel}</b>.</p>
+      to: cxo.email,
+      subject: `[${ticket.ticketNumber}] has been escalated.`,
+      html: layout(`Ticket ${ticket.id} has been escalated`, `
+        <p>Hi ${cxo.fullName},</p>
+        <p>Ticket <b>${ticket.ticketNumber}</b> has been escalated.</p>
         <p>Reason: ${escalation.reason}</p>
         <p><a href="${APP_URL}/tickets/${ticket.id}">View ticket</a></p>
       `),

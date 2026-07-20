@@ -35,6 +35,7 @@ export const commentController = {
   // GET /tickets/:ticketId/comments
   async list(req: AuthedRequest, res: Response) {
     const staff = isStaff(req.user!.role);
+    
     const comments = await prisma.ticketComment.findMany({
       where: { ticketId: req.params.ticketId, ...(staff ? {} : { isInternal: false }) },
       include: { user: true, attachment: true },

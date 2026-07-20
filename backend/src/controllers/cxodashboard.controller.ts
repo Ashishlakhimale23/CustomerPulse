@@ -28,7 +28,12 @@ export const cxoDashboardController = {
     const cxoId = req.user!.id;
 
     const departments = await prisma.department.findMany({
-      where: { cxoId },
+      where: { 
+        OR : [
+          {cxoId},
+          {managerId:cxoId}
+        ]
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     });
