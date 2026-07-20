@@ -11,6 +11,11 @@
 // categories, clients, projects, and states that appear in tickets they
 // can already see (their assigned department(s) + their own tickets).
 //
+// NOTE(changed): the searchable "priority" key is internal priority, not
+// the customer-facing SLA priority (P1-P4) - internal priority is the
+// triage metric staff actually search by, so it replaces the plain
+// priority filter here.
+//
 // Role access this filter enforces client-side (mirrors the backend
 // GET /tickets scoping in ticket.controller.ts):
 //   - GLOBAL_ADMIN: everything.
@@ -18,7 +23,7 @@
 //     plus tickets they personally raised.
 //   - AGENT: only tickets assigned to them, or raised by them.
 import React, { useState, useMemo, useEffect } from "react";
-import { Ticket, TicketStatus, TicketPriority, InternalPriorityLevel, UserRole } from "../types";
+import { Ticket, TicketStatus, InternalPriorityLevel, UserRole } from "../types";
 import { Filter, X } from "lucide-react";
 
 // Loosened on purpose: callers (ManagerDashboard/CxoDashboard) only ever
@@ -52,7 +57,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "">("");
-  const [priorityFilter, setPriorityFilter] = useState<TicketPriority | "">("");
   const [internalPriorityFilter, setInternalPriorityFilter] = useState<InternalPriorityLevel | "">("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -93,10 +97,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     () => [...new Set(scopedTickets.map((t) => t.status))].sort(),
     [scopedTickets]
   );
-  const availablePriorities = useMemo(
-    () => [...new Set(scopedTickets.map((t) => t.priority))].sort(),
-    [scopedTickets]
-  );
   const availableInternalPriorities = useMemo(
     () => [...new Set(scopedTickets.map((t) => t.internalPriority).filter(Boolean))].sort(),
     [scopedTickets]
@@ -135,7 +135,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
         );
 
       const matchesStatus = !statusFilter || ticket.status === statusFilter;
-      const matchesPriority = !priorityFilter || ticket.priority === priorityFilter;
       const matchesInternalPriority = !internalPriorityFilter || ticket.internalPriority === internalPriorityFilter;
       const matchesCategory = !categoryFilter || ticket.categoryId === categoryFilter;
       const matchesDept = !departmentFilter || ticket.departmentId === departmentFilter;
@@ -165,7 +164,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
       return (
         matchesSearch &&
         matchesStatus &&
-        matchesPriority &&
         matchesInternalPriority &&
         matchesDept &&
         matchesCategory &&
@@ -182,7 +180,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     scopedTickets,
     searchTerm,
     statusFilter,
-    priorityFilter,
     internalPriorityFilter,
     departmentFilter,
     categoryFilter,
@@ -206,7 +203,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
   const reset = () => {
     setSearchTerm("");
     setStatusFilter("");
-    setPriorityFilter("");
     setInternalPriorityFilter("");
     setDepartmentFilter("");
     setCategoryFilter("");
@@ -249,13 +245,6 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
           <option value="">All Status</option>
           {availableStatuses.map((s) => (
             <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-
-        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as any)} className="px-4 py-2.5 border border-slate-200 rounded-xl bg-white">
-          <option value="">All Priority</option>
-          {availablePriorities.map((p) => (
-            <option key={p} value={p}>{p}</option>
           ))}
         </select>
 
@@ -342,3 +331,4 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     </div>
   );
 };
+
