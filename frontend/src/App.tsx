@@ -330,6 +330,9 @@ export default function App() {
     } else if (currentView === PAGES.NEW_TICKET) {
       fetchDepartments();
       fetchClients();
+    } else if (currentView === PAGES.TICKET_DETAILS) {
+      fetchDepartments();
+      fetchClients();
     } else if (currentView == PAGES.MY_TICKETS){
       fetchMytickets()
     } else if (currentView == PAGES.ASSINGED_TICKETS){
@@ -2728,5 +2731,3 @@ export default function App() {
     </div>
   );
 }
-
-
