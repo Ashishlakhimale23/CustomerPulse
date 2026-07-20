@@ -70,6 +70,21 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
   const [availableAgents, setAvailableAgents] = useState<UserType[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
 
+  // Edit Ticket form (GLOBAL_ADMIN only)
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    clientName: "",
+    clientEmail: "",
+    representative: "",
+    employeeId: "",
+    site: "",
+    state: "",
+    dateOfOccurance: "",
+  });
+
   const isStaff = ["AGENT"].includes(currentUser.role);
   const isdepartmentHeads = ["CXO","HOD"].includes(currentUser.role)
   const isAdmin = ["GLOBAL_ADMIN"].includes(currentUser.role);
@@ -400,6 +415,76 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
     }
   };
 
+  // Action: Open the Edit Ticket form, pre-filled with current values
+  const openEditForm = () => {
+    if (!ticket) return;
+    setEditForm({
+      title: ticket.title || "",
+      description: ticket.description || "",
+      clientName: ticket.clientName || "",
+      clientEmail: ticket.clientEmail || "",
+      representative: ticket.representative || "",
+      employeeId: ticket.employeeId || "",
+      site: ticket.site || "",
+      state: ticket.state || "",
+      dateOfOccurance: ticket.dateOfOccurance ? ticket.dateOfOccurance.slice(0, 10) : "",
+    });
+    setError("");
+    setSuccess("");
+    setShowEditForm(true);
+  };
+
+  // Action: Save ticket edits (GLOBAL_ADMIN only)
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setEditSaving(true);
+    try {
+      const res = await fetch(`http://localhost:3000/tickets/${ticketId}/edit`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description,
+          clientName: editForm.clientName.trim(),
+          clientEmail: editForm.clientEmail.trim(),
+          representative: editForm.representative,
+          employeeId: editForm.employeeId,
+          site: editForm.site.trim(),
+          state: editForm.state,
+          ...(editForm.dateOfOccurance ? { dateOfOccurance: editForm.dateOfOccurance } : {})
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update ticket");
+
+      await fetch("http://localhost:3000/audit-logs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: `Ticket ${ticket?.ticketNumber} edited`,
+          entityType: "Ticket",
+          entityId: ticketId
+        })
+      });
+
+      setShowEditForm(false);
+      fetchTicketDetails();
+      setSuccess("Ticket updated successfully.");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   
 
   // Compute countdown client-side
@@ -511,6 +596,16 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
 
         {/* Action button bar */}
         <div className="flex items-center gap-2">
+          {/* Full ticket edit - GLOBAL_ADMIN only */}
+          {isAdmin && (
+            <button
+              onClick={openEditForm}
+              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all duration-200 cursor-pointer"
+            >
+              Edit Ticket
+            </button>
+          )}
+
           {/* Reopen Ticket option for Requesters */}
           { ["RESOLVED", "CLOSED"].includes(ticket.status) && (
             <button
@@ -646,6 +741,134 @@ export default function TicketDetail({ ticketId, token, currentUser, onBack,metr
                   className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
                 >
                   Confirm Resolve
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Ticket Dialog - GLOBAL_ADMIN only, full field edit */}
+      {showEditForm && isAdmin && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-zinc-900">
+                Edit Ticket
+              </h2>
+              <button
+                onClick={() => setShowEditForm(false)}
+                className="text-zinc-400 hover:text-zinc-700 text-xl leading-none cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                  rows={4}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">Client Name</label>
+                  <input
+                    type="text"
+                    value={editForm.clientName}
+                    onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">Client Email</label>
+                  <input
+                    type="email"
+                    value={editForm.clientEmail}
+                    onChange={(e) => setEditForm({ ...editForm, clientEmail: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">Representative</label>
+                  <input
+                    type="text"
+                    value={editForm.representative}
+                    onChange={(e) => setEditForm({ ...editForm, representative: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">Employee ID</label>
+                  <input
+                    type="text"
+                    value={editForm.employeeId}
+                    onChange={(e) => setEditForm({ ...editForm, employeeId: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">Site / Location</label>
+                  <input
+                    type="text"
+                    value={editForm.site}
+                    onChange={(e) => setEditForm({ ...editForm, site: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 mb-1">State</label>
+                  <input
+                    type="text"
+                    value={editForm.state}
+                    onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                    className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Date of Occurrence</label>
+                <input
+                  type="date"
+                  value={editForm.dateOfOccurance}
+                  onChange={(e) => setEditForm({ ...editForm, dateOfOccurance: e.target.value })}
+                  className="w-full text-sm p-2.5 border border-zinc-200 rounded-lg bg-white"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditForm(false)}
+                  className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 border border-zinc-200 hover:bg-zinc-50 px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer"
+                >
+                  {editSaving ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
