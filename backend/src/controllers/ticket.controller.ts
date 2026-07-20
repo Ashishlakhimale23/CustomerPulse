@@ -5,15 +5,26 @@ import { escalationService } from "../services/escalation.service";
 import { assignmentService } from "../services/assignment.service";
 import { logStatusChange } from "../services/statushistory.service";
 import { prisma } from "../lib/database";
-import { TicketPriority, TicketStatus, UserRole } from "../generated/prisma/client";
+import { TicketPriority, TicketStatus, UserRole, Designation } from "../generated/prisma/client";
 import { isRequesterOnly } from "../utils/rbac";
 import { parsePagination, paginatedResponse } from "../utils/pagination";
 import { AppError } from "../middleware/errorHandler";
-import { minutesFromNow } from "../utils/time";
+import { minutesFromNow, addMinutes, diffInMinutes } from "../utils/time";
 import { computeSlaClockUpdate, computeTurnOverTimeSeconds } from "../services/slaClock.service";
 import { prismaVersion } from "../generated/prisma/internal/prismaNamespace";
 import { notificationService } from "../services/notification.service";
+import { priorityService } from "../services/priority.service";
+import { internalPriorityService } from "../services/internalPriority.service";
 import { id } from "zod/v4/locales";
+
+// Designations counted as "top management" for the internal-priority
+// scoring - mirrors ticket.service.ts's createTicket.
+const TOP_MANAGEMENT_DESIGNATIONS: Designation[] = [Designation.CEO, Designation.COO, Designation.CXO];
+
+// Statuses whose SLA clock is actively running - mirrors
+// slaClock.service.ts's SLA_PAUSED_STATUSES, expressed as the inverse.
+const ACTIVE_SLA_STATUSES: TicketStatus[] = [TicketStatus.OPEN, TicketStatus.REOPENED, TicketStatus.IN_PROGRESS];
+
 
 // Roles whose "list" view is scoped to the department(s) assigned to them,
 // rather than being requester-only (see below) or company-wide (GLOBAL_ADMIN).
@@ -611,6 +622,18 @@ export const ticketController = {
   // the body; only whatever is actually sent gets updated, so a global
   // admin can correct a single typo'd field without having to resend the
   // whole ticket.
+  //
+  // Since category/project/client/designation drive both the customer-facing
+  // priority and the internal-priority score (see priority.service.ts /
+  // internalPriority.service.ts), an edit recomputes both from whatever the
+  // effective values are post-edit - same formulas createTicket uses. The
+  // SLA window is likewise recalculated (carrying over whatever portion of
+  // the *previous* window was already consumed, exactly like a category's
+  // defaultSlaMinutes change does in ticketCategory.controller.ts), rather
+  // than either keeping a now-stale deadline or granting a full fresh one.
+  // turnOverTime (TAT) is intentionally left untouched - it's a wall-clock
+  // measurement of the ticket's actual lifetime and isn't something an edit
+  // should reset or recompute.
   async editTicket(req: AuthedRequest, res: Response) {
     const {
       title,
@@ -626,7 +649,20 @@ export const ticketController = {
       projectId,
     } = req.body;
 
-    await prisma.ticket.findUniqueOrThrow({ where: { id: req.params.id } });
+    const previous = await prisma.ticket.findUniqueOrThrow({
+      where: { id: req.params.id },
+      select: {
+        status: true,
+        priority: true,
+        categoryId: true,
+        projectId: true,
+        clientName: true,
+        designation: true,
+        slaDeadline: true,
+        slaRemainingMinutes: true,
+        slaTotalMinutes: true,
+      },
+    });
 
     const data: Record<string, unknown> = {};
 
@@ -664,26 +700,34 @@ export const ticketController = {
     if (designation !== undefined) data.designation = designation;
 
     // Cross-entity references are validated so a typo'd id doesn't silently
-    // fail the FK constraint with an opaque 500 later.
+    // fail the FK constraint with an opaque 500 later. The fetched rows are
+    // kept around (rather than re-queried) for the priority/SLA recompute
+    // below.
+    let category: { defaultPriority: TicketPriority; defaultSlaMinutes: number | null; isWorkStopping: boolean; isSafetyViolation: boolean } | null = null;
+    let categoryFetched = false;
     if (departmentId !== undefined) {
       const department = await prisma.department.findUnique({ where: { id: departmentId } });
       if (!department) throw new AppError("Department not found", 400);
       data.departmentId = departmentId;
     }
     if (categoryId !== undefined) {
+      categoryFetched = true;
       if (categoryId === null) {
         data.categoryId = null;
       } else {
-        const category = await prisma.ticketCategory.findUnique({ where: { id: categoryId } });
+        category = await prisma.ticketCategory.findUnique({ where: { id: categoryId } });
         if (!category) throw new AppError("Category not found", 400);
         data.categoryId = categoryId;
       }
     }
+    let project: { isShutdownJob: boolean } | null = null;
+    let projectFetched = false;
     if (projectId !== undefined) {
+      projectFetched = true;
       if (projectId === null) {
         data.projectId = null;
       } else {
-        const project = await prisma.project.findUnique({ where: { id: projectId } });
+        project = await prisma.project.findUnique({ where: { id: projectId } });
         if (!project) throw new AppError("Project not found", 400);
         data.projectId = projectId;
       }
@@ -691,6 +735,70 @@ export const ticketController = {
 
     if (Object.keys(data).length === 0) {
       throw new AppError("No editable fields were provided", 400);
+    }
+
+    // Effective classification inputs post-edit: whatever was just sent,
+    // falling back to what the ticket already had.
+    const effectiveCategoryId = categoryFetched ? categoryId : previous.categoryId;
+    const effectiveProjectId = projectFetched ? projectId : previous.projectId;
+    const effectiveClientName = (data.clientName as string | undefined) ?? previous.clientName;
+    const effectiveDesignation = (data.designation as Designation | null | undefined) ?? previous.designation;
+
+    // Only re-fetch what wasn't already loaded above while validating the
+    // incoming ids.
+    if (!categoryFetched && effectiveCategoryId) {
+      category = await prisma.ticketCategory.findUnique({ where: { id: effectiveCategoryId } });
+    }
+    if (!projectFetched && effectiveProjectId) {
+      project = await prisma.project.findUnique({ where: { id: effectiveProjectId } });
+    }
+    const client = effectiveClientName
+      ? await prisma.client.findFirst({ where: { name: effectiveClientName } })
+      : null;
+
+    const newPriority = priorityService.computePriority({
+      categoryDefaultPriority: category?.defaultPriority,
+    });
+
+    const internalPriorityResult = internalPriorityService.computeScore({
+      isWorkStopping: category?.isWorkStopping ?? false,
+      isSafetyViolation: category?.isSafetyViolation ?? false,
+      isShutdownJob: project?.isShutdownJob ?? false,
+      isReportedByTopManagement: !!effectiveDesignation && TOP_MANAGEMENT_DESIGNATIONS.includes(effectiveDesignation),
+      isKeyClient: client?.isKeyClient ?? false,
+    });
+
+    data.priority = newPriority;
+    data.internalPriority = internalPriorityResult.level;
+
+    // SLA window carryover: figure out how much of the *previous* window
+    // is already consumed, then apply that same consumed amount against the
+    // newly-computed window - same math as a category's defaultSlaMinutes
+    // change (ticketCategory.controller.ts), generalized to also account for
+    // a priority change with no category at all.
+    const now = new Date();
+    const previousTotalMinutes = previous.slaTotalMinutes ?? BASE_SLA_MINUTES_BY_PRIORITY[previous.priority];
+    const isCurrentlyActive = ACTIVE_SLA_STATUSES.includes(previous.status);
+
+    const previousRemainingMinutes = isCurrentlyActive
+      ? (previous.slaDeadline ? diffInMinutes(now, previous.slaDeadline) : previousTotalMinutes)
+      : (previous.slaRemainingMinutes ?? previousTotalMinutes);
+
+    const consumedMinutes = Math.max(0, previousTotalMinutes - previousRemainingMinutes);
+
+    const newTotalMinutes = category?.defaultSlaMinutes ?? BASE_SLA_MINUTES_BY_PRIORITY[newPriority];
+    const newRemainingMinutes = newTotalMinutes - consumedMinutes;
+
+    data.slaTotalMinutes = newTotalMinutes;
+    if (isCurrentlyActive) {
+      // Deadline is live and being checked by the SLA sweep - recalculate
+      // it directly (may land in the past, i.e. immediately breached).
+      data.slaDeadline = addMinutes(now, newRemainingMinutes);
+      data.slaBreached = newRemainingMinutes <= 0;
+    } else {
+      // ON_HOLD / RESOLVED - the clock is paused, so only the banked
+      // remainder is updated; the deadline stays cleared until it resumes.
+      data.slaRemainingMinutes = newRemainingMinutes;
     }
 
     const ticket = await prisma.ticket.update({
