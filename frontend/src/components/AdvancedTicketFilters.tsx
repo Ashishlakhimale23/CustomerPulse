@@ -1,5 +1,3 @@
-// /home/workdir/artifacts/CustomerPulse-main/frontend/src/components/AdvancedTicketFilters.tsx
-//
 // Key/value filter search engine for tickets.
 //
 // "Keys" are the fields a person can filter on (status, category,
@@ -59,6 +57,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "">("");
   const [internalPriorityFilter, setInternalPriorityFilter] = useState<InternalPriorityLevel | "">("");
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
@@ -105,6 +104,23 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     const deptIds = new Set(scopedTickets.map((t) => t.departmentId));
     return departments.filter((d) => deptIds.has(d.id));
   }, [scopedTickets, departments]);
+  // Agent-wise filtering for GLOBAL_ADMIN/CXO/HOD - option list is derived
+  // from scopedTickets (so it only ever contains agents belonging to the
+  // department(s) this person already has access to), and narrows further
+  // to just the selected department when one is picked, mirroring how
+  // availableCategories/availableClients narrow with departmentFilter.
+  const availableAgents = useMemo(() => {
+    const byDept = departmentFilter
+      ? scopedTickets.filter((t) => t.departmentId === departmentFilter)
+      : scopedTickets;
+    const map = new Map<string, string>();
+    byDept.forEach((t) => {
+      if (t.assigneeId && t.assignee?.fullName) map.set(t.assigneeId, t.assignee.fullName);
+    });
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [scopedTickets, departmentFilter]);
   const availableCategories = useMemo(() => {
     const catIds = new Set(scopedTickets.map((t) => t.categoryId).filter(Boolean));
     return categories.filter((c) => catIds.has(c.id));
@@ -130,7 +146,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     return scopedTickets.filter((ticket) => {
       const matchesSearch =
         !searchTerm ||
-        [ticket.title, ticket.description, ticket.ticketNumber, ticket.clientName].some((field) =>
+        [ticket.title, ticket.description, ticket.ticketNumber, ticket.clientName, ticket.requester?.fullName].some((field) =>
           field?.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
@@ -138,6 +154,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
       const matchesInternalPriority = !internalPriorityFilter || ticket.internalPriority === internalPriorityFilter;
       const matchesCategory = !categoryFilter || ticket.categoryId === categoryFilter;
       const matchesDept = !departmentFilter || ticket.departmentId === departmentFilter;
+      const matchesAgent = !agentFilter || ticket.assigneeId === agentFilter;
       const matchesClient = !clientFilter || ticket.clientName === clientFilter;
       const matchesProject = !projectFilter || ticket.projectId === projectFilter;
       const matchesState = !stateFilter || ticket.state === stateFilter;
@@ -166,6 +183,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
         matchesStatus &&
         matchesInternalPriority &&
         matchesDept &&
+        matchesAgent &&
         matchesCategory &&
         matchesClient &&
         matchesProject &&
@@ -182,6 +200,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     statusFilter,
     internalPriorityFilter,
     departmentFilter,
+    agentFilter,
     categoryFilter,
     clientFilter,
     projectFilter,
@@ -200,11 +219,22 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTickets]);
 
+  // If the department changes to one that doesn't include the currently
+  // selected agent, drop the (now stale/invalid) agent selection rather
+  // than silently filtering to zero results.
+  useEffect(() => {
+    if (agentFilter && !availableAgents.some((a) => a.id === agentFilter)) {
+      setAgentFilter("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableAgents]);
+
   const reset = () => {
     setSearchTerm("");
     setStatusFilter("");
     setInternalPriorityFilter("");
     setDepartmentFilter("");
+    setAgentFilter("");
     setCategoryFilter("");
     setClientFilter("");
     setProjectFilter("");
@@ -234,7 +264,7 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
         <div className="lg:col-span-2">
           <input
             type="text"
-            placeholder="Search title, #, client..."
+            placeholder="Search title, #, client, requester..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-1"
@@ -268,6 +298,19 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+
+        {/* Agent-wise filter - GLOBAL_ADMIN/CXO/HOD only, scoped to the
+            department(s) they have access to (and further narrowed to the
+            selected department, if any). Not shown for AGENT since agents
+            are already scoped to just their own tickets. */}
+        {userRole !== UserRole.AGENT && (
+          <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="px-4 py-2.5 border border-slate-200 rounded-xl bg-white">
+            <option value="">All Agents</option>
+            {availableAgents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        )}
 
         <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="px-4 py-2.5 border border-slate-200 rounded-xl bg-white">
           <option value="">All Clients</option>
@@ -331,4 +374,3 @@ export const AdvancedTicketFilters: React.FC<AdvancedTicketFiltersProps> = ({
     </div>
   );
 };
-
